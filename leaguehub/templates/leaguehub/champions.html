@@ -1,0 +1,11 @@
+{% extends "leaguehub/base.html" %}
+{% block content %}
+<h1>Champions</h1>
+<ul class="list-group">
+  {% for c in champions %}
+    <li class="list-group-item">{{ c.season.year }} — <strong>{{ c.team.name }}</strong></li>
+  {% empty %}
+    <li class="list-group-item">No data yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

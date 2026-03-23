@@ -22,28 +22,127 @@
 </div>
 {% endif %}
 
+<div class="alert alert-info">
+  <strong>Keeper cost rule:</strong> You forfeit the draft pick from the round the player was last drafted in.
+  Undrafted players cost a round 10 pick. If both keepers were drafted in the same round,
+  you forfeit that round <em>and</em> the round before it.
+</div>
+
 <form method="post">
   {% csrf_token %}
   {% if form.errors %}
     <div class="alert alert-danger">{{ form.errors }}</div>
   {% endif %}
-  <p class="text-muted">Select up to 2 keepers. <span id="keeper-count">{{ current_submissions.count }} of 2 selected.</span></p>
-  {% for checkbox in form.players %}
-    <div class="form-check">
-      {{ checkbox.tag }}
-      <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
-    </div>
-  {% empty %}
-    <p class="text-muted">No eligible players on your roster.</p>
-  {% endfor %}
-  <button type="submit" class="btn btn-primary mt-3">Save Keepers</button>
+
+  <p class="text-muted mb-2">Select up to 2 keepers.</p>
+
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th style="width:40px"></th>
+        <th>Player</th>
+        <th>Position</th>
+        <th>Drafted</th>
+        <th>Pick Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for checkbox in form.players %}
+        {% with pid=checkbox.data.value %}
+        <tr class="keeper-row" data-player-id="{{ pid }}" data-round="{{ player_rounds|default_if_none:'' }}">
+          <td>{{ checkbox.tag }}</td>
+          <td><label class="form-check-label fw-semibold" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label></td>
+          <td class="text-muted small player-position"></td>
+          <td class="text-muted small player-draft-round"></td>
+          <td class="text-muted small player-cost"></td>
+        </tr>
+        {% endwith %}
+      {% empty %}
+        <tr><td colspan="5" class="text-muted">No eligible players on your roster.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div id="cost-summary" class="alert alert-secondary d-none mb-3"></div>
+
+  <button type="submit" class="btn btn-primary">Save Keepers</button>
 </form>
 
+{{ player_rounds|json_script:"player-rounds-data" }}
 <script>
-  document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
-    const count = document.querySelectorAll('input[type=checkbox]:checked').length;
-    document.getElementById('keeper-count').textContent = count + ' of 2 selected.';
-  }));
+const playerRounds = JSON.parse(document.getElementById('player-rounds-data').textContent);
+
+// Populate round/cost cells and wire up checkboxes
+document.querySelectorAll('.keeper-row').forEach(row => {
+  const pid = parseInt(row.dataset.playerId);
+  const round = playerRounds[pid] || 10;
+  const undrafted = !playerRounds[pid];
+  row.querySelector('.player-draft-round').textContent = undrafted ? 'Undrafted (R10)' : `Round ${round}`;
+  row.dataset.round = round;
+});
+
+function updateCosts() {
+  const checked = [...document.querySelectorAll('.keeper-row input[type=checkbox]:checked')];
+  const rows = document.querySelectorAll('.keeper-row');
+
+  // Clear all cost cells
+  rows.forEach(r => r.querySelector('.player-cost').textContent = '');
+
+  if (checked.length === 0) {
+    hideSummary();
+    return;
+  }
+
+  if (checked.length === 1) {
+    const round = parseInt(checked[0].closest('.keeper-row').dataset.round);
+    checked[0].closest('.keeper-row').querySelector('.player-cost').textContent = `Costs R${round} pick`;
+    showSummary([round]);
+    return;
+  }
+
+  if (checked.length === 2) {
+    const r1 = parseInt(checked[0].closest('.keeper-row').dataset.round);
+    const r2 = parseInt(checked[1].closest('.keeper-row').dataset.round);
+
+    if (r1 === r2) {
+      const preceding = Math.max(1, r1 - 1);
+      checked[0].closest('.keeper-row').querySelector('.player-cost').textContent = `Costs R${r1} pick`;
+      checked[1].closest('.keeper-row').querySelector('.player-cost').textContent = `Costs R${r1} pick (same round — also lose R${preceding})`;
+      showSummary([r1, preceding]);
+    } else {
+      checked[0].closest('.keeper-row').querySelector('.player-cost').textContent = `Costs R${r1} pick`;
+      checked[1].closest('.keeper-row').querySelector('.player-cost').textContent = `Costs R${r2} pick`;
+      showSummary([r1, r2]);
+    }
+    return;
+  }
+
+  // More than 2 checked — show warning
+  showSummary(null);
+}
+
+function showSummary(rounds) {
+  const el = document.getElementById('cost-summary');
+  el.classList.remove('d-none');
+  if (!rounds) {
+    el.className = 'alert alert-danger mb-3';
+    el.textContent = 'You may only select up to 2 keepers.';
+    return;
+  }
+  const sorted = [...rounds].sort((a, b) => a - b);
+  el.className = 'alert alert-secondary mb-3';
+  el.textContent = `Draft picks forfeited: ${sorted.map(r => `Round ${r}`).join(', ')}`;
+}
+
+function hideSummary() {
+  document.getElementById('cost-summary').classList.add('d-none');
+}
+
+document.querySelectorAll('.keeper-row input[type=checkbox]').forEach(cb => {
+  cb.addEventListener('change', updateCosts);
+});
+
+updateCosts();
 </script>
 
 <hr>

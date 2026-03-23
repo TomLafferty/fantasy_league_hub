@@ -1,5 +1,5 @@
 from decimal import Decimal
-from .models import Champion, KeeperRecord, ManagerProfile, Player, RosterSnapshot, Season, Standing, Team
+from .models import Champion, DraftPick, KeeperRecord, ManagerProfile, Player, RosterSnapshot, Season, Standing, Team
 
 
 def _extract_team_meta(team_meta_list: list) -> dict:
@@ -181,6 +181,45 @@ def sync_keepers_from_yahoo(season: Season, payload: dict) -> int:
             team=team,
             player=player,
             defaults={"source": "yahoo"},
+        )
+        if created:
+            count += 1
+
+    return count
+
+
+def sync_draft_picks_from_yahoo(season: Season, payload: dict) -> int:
+    """Store all draft picks for a season. Returns count created."""
+    league_list = payload.get("fantasy_content", {}).get("league", [])
+    if len(league_list) < 2:
+        return 0
+
+    draft_results = league_list[1].get("draft_results", {})
+    if isinstance(draft_results, list):
+        draft_results = draft_results[0] if draft_results else {}
+
+    count = 0
+    for key, value in draft_results.items():
+        if key == "count" or not isinstance(value, dict):
+            continue
+
+        pick_data = value.get("draft_result", {})
+        if isinstance(pick_data, list):
+            pick_data = pick_data[0] if pick_data else {}
+
+        round_num = int(pick_data.get("round", 0))
+        pick_num = int(pick_data.get("pick", 0))
+        if not round_num or not pick_num:
+            continue
+
+        team = Team.objects.filter(season=season, yahoo_team_key=pick_data.get("team_key", "")).first()
+        player = Player.objects.filter(yahoo_player_key=pick_data.get("player_key", "")).first()
+
+        _, created = DraftPick.objects.get_or_create(
+            season=season,
+            round=round_num,
+            pick=pick_num,
+            defaults={"team": team, "player": player},
         )
         if created:
             count += 1

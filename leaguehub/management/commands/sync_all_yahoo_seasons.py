@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 from leaguehub.models import Season, Standing, Team
 from leaguehub.services import (
     sync_champion_from_standings,
+    sync_draft_picks_from_yahoo,
     sync_final_roster_from_yahoo,
     sync_keepers_from_draft,
     sync_keepers_from_yahoo,
@@ -88,10 +89,19 @@ class Command(BaseCommand):
                 except CommandError as e:
                     self.stderr.write(self.style.ERROR(f"  [fail] roster {team.name}: {e}"))
 
+            # Draft picks (all rounds — used for keeper cost calculation)
+            try:
+                draft_payload = get(f"{base}/league/{full_league_key}/draftresults")
+                pick_count = sync_draft_picks_from_yahoo(season, draft_payload)
+                self.stdout.write(f"  [ok] draft picks — {pick_count} pick(s) stored")
+            except CommandError as e:
+                self.stderr.write(self.style.ERROR(f"  [fail] draft picks: {e}"))
+                draft_payload = None
+
             # Keepers — try both sources; get_or_create prevents duplicates
             if options["sync_keepers"]:
                 try:
-                    count = sync_keepers_from_draft(season, get(f"{base}/league/{full_league_key}/draftresults"))
+                    count = sync_keepers_from_draft(season, draft_payload or get(f"{base}/league/{full_league_key}/draftresults"))
                     count += sync_keepers_from_yahoo(season, get(f"{base}/league/{full_league_key}/players;status=K/ownership"))
                     self.stdout.write(f"  [ok] keepers — {count} keeper(s) found")
                 except CommandError as e:

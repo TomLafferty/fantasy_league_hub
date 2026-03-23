@@ -31,4 +31,15 @@
   </tbody>
 </table>
 </div>
+<script>
+  document.querySelectorAll('td').forEach(el => {
+    if (el.textContent.toLowerCase().includes('sorry h8terz')) {
+      el.classList.add('easter-egg-trigger');
+      el.title = '👀';
+      el.addEventListener('click', () => {
+        document.getElementById('batman-overlay').classList.add('show');
+      });
+    }
+  });
+</script>
 {% endblock %}

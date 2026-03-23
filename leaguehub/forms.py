@@ -7,7 +7,7 @@ class KeeperSubmissionForm(forms.Form):
     players = forms.ModelMultipleChoiceField(
         queryset=Player.objects.none(),
         widget=forms.CheckboxSelectMultiple,
-        required=True,
+        required=False,
     )
 
     def __init__(self, *args, season: Season, team: Team, max_keepers: int = 3, **kwargs):

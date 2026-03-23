@@ -6,6 +6,7 @@ from leaguehub.services import (
     sync_champion_from_standings,
     sync_final_roster_from_yahoo,
     sync_keepers_from_draft,
+    sync_keepers_from_yahoo,
     sync_league_metadata_from_yahoo,
     sync_standings_from_yahoo,
 )
@@ -87,10 +88,11 @@ class Command(BaseCommand):
                 except CommandError as e:
                     self.stderr.write(self.style.ERROR(f"  [fail] roster {team.name}: {e}"))
 
-            # Keepers from draft results (type=keeper picks)
+            # Keepers — try both sources; get_or_create prevents duplicates
             if options["sync_keepers"]:
                 try:
                     count = sync_keepers_from_draft(season, get(f"{base}/league/{full_league_key}/draftresults"))
+                    count += sync_keepers_from_yahoo(season, get(f"{base}/league/{full_league_key}/players;status=K/ownership"))
                     self.stdout.write(f"  [ok] keepers — {count} keeper(s) found")
                 except CommandError as e:
                     self.stderr.write(self.style.ERROR(f"  [fail] keepers: {e}"))

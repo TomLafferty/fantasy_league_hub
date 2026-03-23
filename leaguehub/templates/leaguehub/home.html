@@ -1,6 +1,7 @@
 {% extends "leaguehub/base.html" %}
+{% block title %}{{ league_name }} Hub{% endblock %}
 {% block content %}
-<h1>Fantasy League Hub</h1>
+<h1>{{ league_name }} Hub</h1>
 <p>League history, standings, keepers, and manager tools.</p>
 
 {% if current_season %}

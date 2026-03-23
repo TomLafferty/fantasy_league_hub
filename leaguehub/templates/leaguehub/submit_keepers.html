@@ -1,12 +1,19 @@
 {% extends "leaguehub/base.html" %}
+{% block title %}Submit Keepers — {{ league_name }} Hub{% endblock %}
+{% block nav_submit %}active{% endblock %}
 {% block content %}
 <h1>Submit Keepers</h1>
-<p><strong>Season:</strong> {{ season.name }}</p>
-<p><strong>Team:</strong> {{ team.name }}</p>
+<p><strong>Season:</strong> {{ season.name }} &mdash; <strong>Team:</strong> {{ team.name }}</p>
+
+{% if season.keeper_deadline %}
+  <div class="alert alert-secondary">
+    <strong>Deadline:</strong> {{ season.keeper_deadline|date:"F j, Y g:i A" }}
+  </div>
+{% endif %}
 
 {% if ineligible %}
 <div class="alert alert-warning">
-  <strong>Ineligible players</strong> — these players are on your roster but cannot be kept because they were already kept last year:
+  <strong>Ineligible players</strong> — already kept last year:
   <ul class="mb-0 mt-2">
     {% for item in ineligible %}
       <li>{{ item.player.full_name }} <span class="text-muted">(kept by {{ item.kept_by }} in {{ season.year|add:"-1" }})</span></li>
@@ -17,17 +24,35 @@
 
 <form method="post">
   {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit" class="btn btn-primary">Save Keepers</button>
+  {% if form.errors %}
+    <div class="alert alert-danger">{{ form.errors }}</div>
+  {% endif %}
+  <p class="text-muted">Select up to 2 keepers. <span id="keeper-count">{{ current_submissions.count }} of 2 selected.</span></p>
+  {% for checkbox in form.players %}
+    <div class="form-check">
+      {{ checkbox.tag }}
+      <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+    </div>
+  {% empty %}
+    <p class="text-muted">No eligible players on your roster.</p>
+  {% endfor %}
+  <button type="submit" class="btn btn-primary mt-3">Save Keepers</button>
 </form>
 
+<script>
+  document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
+    const count = document.querySelectorAll('input[type=checkbox]:checked').length;
+    document.getElementById('keeper-count').textContent = count + ' of 2 selected.';
+  }));
+</script>
+
 <hr>
-<h3>Current Submission</h3>
-<ul>
+<h5>Current Submission</h5>
+<ul class="list-group mb-3">
   {% for item in current_submissions %}
-    <li>{{ item.player.full_name }}</li>
+    <li class="list-group-item">{{ item.player.full_name }}</li>
   {% empty %}
-    <li>No keepers submitted yet.</li>
+    <li class="list-group-item text-muted">No keepers submitted yet.</li>
   {% endfor %}
 </ul>
 {% endblock %}

@@ -1,4 +1,5 @@
 from django import forms
+from django.db import transaction
 from .models import KeeperRecord, KeeperSubmission, Player, RosterSnapshot, Season, Team
 
 
@@ -37,11 +38,12 @@ class KeeperSubmissionForm(forms.Form):
         return players
 
     def save(self, user):
-        KeeperSubmission.objects.filter(season=self.season, team=self.team).delete()
-        for player in self.cleaned_data["players"]:
-            KeeperSubmission.objects.create(
-                season=self.season,
-                team=self.team,
-                player=player,
-                submitted_by=user,
-            )
+        with transaction.atomic():
+            KeeperSubmission.objects.filter(season=self.season, team=self.team).delete()
+            for player in self.cleaned_data["players"]:
+                KeeperSubmission.objects.create(
+                    season=self.season,
+                    team=self.team,
+                    player=player,
+                    submitted_by=user,
+                )

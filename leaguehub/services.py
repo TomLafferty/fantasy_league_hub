@@ -1,5 +1,5 @@
 from decimal import Decimal
-from .models import Champion, Player, RosterSnapshot, Season, Standing, Team
+from .models import Player, RosterSnapshot, Season, Standing, Team
 
 
 def sync_standings_from_yahoo(season: Season, payload: dict):
@@ -38,17 +38,9 @@ def sync_standings_from_yahoo(season: Season, payload: dict):
                 "wins": int(outcomes.get("wins", 0)),
                 "losses": int(outcomes.get("losses", 0)),
                 "ties": int(outcomes.get("ties", 0)),
-                "points_for": Decimal(str(entry.get("team_points", {}).get("total", "0"))),
-                "points_against": Decimal("0.00"),
-                "final_place": int(team_standings.get("rank", 999)),
+                "points_for": Decimal(str(entry.get("team_points", {}).get("total", "0") or "0")),
+                "points_against": Decimal(str(team_standings.get("points_against", "0") or "0")),
             },
-        )
-
-    top = Standing.objects.filter(season=season).order_by("rank").first()
-    if top:
-        Champion.objects.update_or_create(
-            season=season,
-            defaults={"team": top.team},
         )
 
 

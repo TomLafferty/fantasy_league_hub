@@ -8,7 +8,7 @@ class Season(models.Model):
     year = models.PositiveIntegerField(unique=True)
     name = models.CharField(max_length=100, blank=True)
     yahoo_game_key = models.CharField(max_length=50, blank=True)
-    yahoo_league_key = models.CharField(max_length=100, blank=True, unique=True)
+    yahoo_league_key = models.CharField(max_length=100, blank=True)
     is_current = models.BooleanField(default=False)
     keeper_deadline = models.DateTimeField(null=True, blank=True)
 
@@ -17,6 +17,11 @@ class Season(models.Model):
 
     def __str__(self):
         return self.name or str(self.year)
+
+    def save(self, *args, **kwargs):
+        if self.is_current:
+            Season.objects.exclude(pk=self.pk).filter(is_current=True).update(is_current=False)
+        super().save(*args, **kwargs)
 
 
 class ManagerProfile(models.Model):

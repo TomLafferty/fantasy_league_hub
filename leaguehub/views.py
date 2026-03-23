@@ -4,7 +4,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import KeeperSubmissionForm
-from .models import Champion, KeeperRecord, KeeperSubmission, Season, Standing, TeamAccess
+from .models import Champion, KeeperRecord, KeeperSubmission, RosterSnapshot, Season, Standing, Team, TeamAccess
 
 
 def home(request):
@@ -34,8 +34,32 @@ def standings_view(request):
 
 
 def keeper_history_view(request):
-    records = KeeperRecord.objects.select_related("season", "team", "player").all()
-    return render(request, "leaguehub/keeper_history.html", {"records": records})
+    seasons = Season.objects.all().order_by("-year")
+    selected_id = request.GET.get("season")
+    selected_season = seasons.first() if not selected_id else get_object_or_404(Season, id=selected_id)
+    records = (
+        KeeperRecord.objects.filter(season=selected_season)
+        .select_related("season", "team", "player")
+        .order_by("team__name", "player__full_name")
+    )
+    return render(request, "leaguehub/keeper_history.html", {
+        "seasons": seasons,
+        "selected_season": selected_season,
+        "records": records,
+    })
+
+
+def team_detail_view(request, team_id):
+    team = get_object_or_404(Team, id=team_id)
+    roster = (
+        RosterSnapshot.objects.filter(team=team, is_final_roster=True)
+        .select_related("player")
+        .order_by("player__primary_position", "player__full_name")
+    )
+    return render(request, "leaguehub/team_detail.html", {
+        "team": team,
+        "roster": roster,
+    })
 
 
 @login_required
@@ -73,9 +97,27 @@ def submit_keepers_view(request):
         team=team,
     ).select_related("player").order_by("player__full_name")
 
+    # Build ineligible player info: players on this team's final roster who were kept last year
+    previous_season = Season.objects.filter(year=season.year - 1).first()
+    ineligible = []
+    if previous_season:
+        roster_player_ids = RosterSnapshot.objects.filter(
+            season=season, team=team, is_final_roster=True
+        ).values_list("player_id", flat=True)
+
+        prior_records = (
+            KeeperRecord.objects.filter(season=previous_season, player_id__in=roster_player_ids)
+            .select_related("player", "team")
+        )
+        ineligible = [
+            {"player": r.player, "kept_by": r.team.name}
+            for r in prior_records
+        ]
+
     return render(request, "leaguehub/submit_keepers.html", {
         "season": season,
         "team": team,
         "form": form,
         "current_submissions": current_submissions,
+        "ineligible": ineligible,
     })

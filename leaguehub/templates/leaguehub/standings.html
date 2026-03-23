@@ -1,6 +1,11 @@
 {% extends "leaguehub/base.html" %}
 {% block content %}
-<h1>Standings</h1>
+<div class="d-flex align-items-center gap-3 mb-3">
+  {% if selected_season.logo_url %}
+    <img src="{{ selected_season.logo_url }}" alt="" height="56" style="border-radius:6px">
+  {% endif %}
+  <h1 class="mb-0">Standings</h1>
+</div>
 
 <form method="get" class="mb-3">
   <select name="season" class="form-select" onchange="this.form.submit()">
@@ -23,7 +28,7 @@
     {% for row in standings %}
       <tr>
         <td>{{ row.rank }}</td>
-        <td>{{ row.team.name }}</td>
+        <td><a href="{% url 'team_detail' row.team.id %}">{{ row.team.name }}</a></td>
         <td>{{ row.wins }}-{{ row.losses }}-{{ row.ties }}</td>
         <td>{{ row.points_for }}</td>
       </tr>

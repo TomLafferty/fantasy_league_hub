@@ -1,6 +1,9 @@
 import os
 import requests
 from requests.auth import HTTPBasicAuth
+from django.core.exceptions import ImproperlyConfigured
+
+_REQUIRED_ENV_VARS = ("YAHOO_CLIENT_ID", "YAHOO_CLIENT_SECRET", "YAHOO_REDIRECT_URI")
 
 
 class YahooOAuthClient:
@@ -9,6 +12,11 @@ class YahooOAuthClient:
     API_BASE = "https://fantasysports.yahooapis.com/fantasy/v2"
 
     def __init__(self):
+        missing = [k for k in _REQUIRED_ENV_VARS if not os.environ.get(k)]
+        if missing:
+            raise ImproperlyConfigured(
+                f"Missing required environment variable(s): {', '.join(missing)}"
+            )
         self.client_id = os.environ["YAHOO_CLIENT_ID"]
         self.client_secret = os.environ["YAHOO_CLIENT_SECRET"]
         self.redirect_uri = os.environ["YAHOO_REDIRECT_URI"]

@@ -1,8 +1,19 @@
 {% extends "leaguehub/base.html" %}
 {% block content %}
 <h1>Submit Keepers</h1>
-<p><strong>Season:</strong> {{ season.year }}</p>
+<p><strong>Season:</strong> {{ season.name }}</p>
 <p><strong>Team:</strong> {{ team.name }}</p>
+
+{% if ineligible %}
+<div class="alert alert-warning">
+  <strong>Ineligible players</strong> — these players are on your roster but cannot be kept because they were already kept last year:
+  <ul class="mb-0 mt-2">
+    {% for item in ineligible %}
+      <li>{{ item.player.full_name }} <span class="text-muted">(kept by {{ item.kept_by }} in {{ season.year|add:"-1" }})</span></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 
 <form method="post">
   {% csrf_token %}

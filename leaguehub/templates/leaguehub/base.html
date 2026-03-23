@@ -4,7 +4,208 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ league_name }} Hub{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* ══════════════════════════════════════
+       RETRO ARCADE — full page background
+    ══════════════════════════════════════ */
+    html, body { height: 100%; margin: 0; }
+
+    body {
+      background-color: #030d05;
+      color: #d0d0d0;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    /* Fixed retro field grid behind everything */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        /* horizontal yard lines */
+        repeating-linear-gradient(0deg,
+          transparent 0px, transparent 58px,
+          rgba(0,220,60,.18) 58px, rgba(0,220,60,.18) 60px),
+        /* vertical hash marks */
+        repeating-linear-gradient(90deg,
+          transparent 0px, transparent 58px,
+          rgba(0,220,60,.08) 58px, rgba(0,220,60,.08) 60px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* CRT scanlines */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(180deg,
+        transparent, transparent 2px,
+        rgba(0,0,0,.13) 2px, rgba(0,0,0,.13) 4px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* All real content sits above the fixed layers */
+    .navbar, .container, #batman-overlay { position: relative; z-index: 2; }
+
+    /* Navbar */
+    .navbar.bg-dark {
+      background-color: #020a03 !important;
+      border-bottom: 2px solid #00dd44 !important;
+      box-shadow: 0 0 20px rgba(0,221,68,.4) !important;
+    }
+    .navbar-brand { text-shadow: 0 0 10px rgba(0,255,80,.7); }
+
+    /* Content panel — semi-transparent so grid shows through */
+    .container:not(.navbar > .container) {
+      background: rgba(2,10,4,.82);
+      border: 1px solid rgba(0,210,55,.28);
+      border-radius: 2px;
+      padding: 1.5rem !important;
+      box-shadow: 0 0 40px rgba(0,200,50,.1), inset 0 0 60px rgba(0,0,0,.35);
+      margin-bottom: 2rem;
+    }
+
+    /* Headings */
+    h1,h2,h3,h4,h5 {
+      color: #eaeaea;
+      text-shadow: 0 0 10px rgba(0,220,60,.4);
+    }
+
+    /* Tables — dark themed, no white anywhere */
+    .table {
+      color: #c8c8c8 !important;
+      border-color: rgba(0,210,55,.12) !important;
+    }
+    .table thead {
+      background-color: #030e05 !important;
+    }
+    .table thead th {
+      color: #00dd44 !important;
+      background-color: #030e05 !important;
+      border-bottom: 2px solid rgba(0,210,55,.45) !important;
+    }
+    .table td, .table th {
+      border-color: rgba(0,210,55,.1) !important;
+    }
+    .table tbody tr {
+      background-color: transparent !important;
+    }
+    .table-striped > tbody > tr:nth-of-type(odd) > * {
+      background-color: rgba(0,180,45,.05) !important;
+      color: #c8c8c8 !important;
+    }
+    .table-striped > tbody > tr:nth-of-type(even) > * {
+      background-color: transparent !important;
+      color: #c8c8c8 !important;
+    }
+    .table-hover > tbody > tr:hover > * {
+      background-color: rgba(0,210,55,.1) !important;
+      color: #fff !important;
+    }
+    .align-middle td { vertical-align: middle; }
+
+    /* Links */
+    a:not(.btn):not(.navbar-brand):not(.nav-link) { color: #00dd44; text-decoration: none; }
+    a:not(.btn):not(.navbar-brand):not(.nav-link):hover { color: #44ff88; text-shadow: 0 0 6px rgba(0,220,60,.5); }
+
+    /* Forms */
+    .form-select, .form-control {
+      background-color: #020a03 !important;
+      border-color: rgba(0,210,55,.3) !important;
+      color: #d0d0d0 !important;
+    }
+    .form-select:focus, .form-control:focus {
+      border-color: #00dd44 !important;
+      box-shadow: 0 0 0 .2rem rgba(0,210,55,.22) !important;
+      color: #e0e0e0 !important;
+    }
+    /* Buttons */
+    .btn-primary {
+      background-color: #004d10 !important;
+      border-color: #008822 !important;
+      color: #00ff50 !important;
+    }
+    .btn-primary:hover {
+      background-color: #006a18 !important;
+      border-color: #00dd44 !important;
+      box-shadow: 0 0 12px rgba(0,210,55,.4) !important;
+    }
+    /* Alerts */
+    .alert { border-radius: 2px; }
+    .alert-info, .alert-secondary {
+      background-color: rgba(0,35,12,.8) !important;
+      border-color: rgba(0,180,50,.3) !important;
+      color: #88d888 !important;
+    }
+    .alert-warning {
+      background-color: rgba(35,25,0,.8) !important;
+      border-color: rgba(200,150,0,.4) !important;
+      color: #d8c060 !important;
+    }
+    .alert-danger {
+      background-color: rgba(35,0,0,.8) !important;
+      border-color: rgba(200,0,0,.4) !important;
+      color: #d86060 !important;
+    }
+    /* List groups */
+    .list-group-item {
+      background-color: rgba(2,10,4,.9) !important;
+      border-color: rgba(0,200,50,.12) !important;
+      color: #c8c8c8 !important;
+    }
+    /* Form checks */
+    .form-check-label { color: #c8c8c8; }
+    .form-check-input { background-color: #020a03; border-color: rgba(0,210,55,.4); }
+    .form-check-input:checked { background-color: #009930; border-color: #00dd44; }
+
+    /* ══════════════════════════════════════
+       BATMAN EASTER EGG
+    ══════════════════════════════════════ */
+    #batman-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.95);
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      cursor: pointer;
+    }
+    #batman-overlay.show { display: flex; }
+
+    #batman-screen {
+      border: 4px solid #ffd700;
+      box-shadow: 0 0 0 4px #000, 0 0 0 8px #ffd700, 0 0 60px rgba(255,215,0,.5);
+      background: #000;
+      padding: 20px 32px 28px;
+      text-align: center;
+      image-rendering: pixelated;
+    }
+    .batman-label {
+      font-family: 'Courier New', monospace;
+      letter-spacing: .15em;
+      font-size: .65rem;
+    }
+    .batman-top    { color: #ffd700; text-shadow: 0 0 10px rgba(255,215,0,.8); margin-bottom: 16px; animation: flicker 2.5s infinite; font-size: .8rem; }
+    .batman-bottom { color: #555; margin-top: 16px; animation: blink 1s step-end infinite; }
+    .batman-name   { color: #ffd700; font-family: 'Courier New', monospace; font-size: .6rem; letter-spacing: .22em; margin-top: 8px; text-shadow: 0 0 8px rgba(255,215,0,.7); }
+
+    @keyframes flicker { 0%,93%,100%{opacity:1} 94%{opacity:.2} 96%{opacity:.9} 98%{opacity:.1} }
+    @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes cole-dance {
+      0%   { transform: translateY(0)    rotate(-4deg); }
+      25%  { transform: translateY(-10px) rotate(4deg); }
+      50%  { transform: translateY(-4px)  rotate(-3deg); }
+      75%  { transform: translateY(-12px) rotate(5deg); }
+      100% { transform: translateY(0)    rotate(-4deg); }
+    }
+
+    .easter-egg-trigger { cursor: pointer; }
+    .easter-egg-trigger:hover * { color: #ffd700 !important; text-shadow: 0 0 8px rgba(255,215,0,.5) !important; }
+  </style>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
@@ -39,6 +240,55 @@
     {% endfor %}
   {% endif %}
   {% block content %}{% endblock %}
+</div>
+
+<!-- ══ BATMAN EASTER EGG ══ -->
+<div id="batman-overlay" onclick="this.classList.remove('show')">
+  <div id="batman-screen">
+    <div class="batman-label batman-top">★ DRAFT WEEKEND COLE APPEARS ★</div>
+    <svg xmlns="http://www.w3.org/2000/svg" width="144" height="240"
+         style="display:block;margin:0 auto;image-rendering:pixelated;animation:cole-dance 0.5s ease-in-out infinite">
+      <!-- BAT EARS -->
+      <rect x="36"  y="0"   width="12" height="24" fill="#0d0d0d"/>
+      <rect x="96"  y="0"   width="12" height="24" fill="#0d0d0d"/>
+      <rect x="24"  y="24"  width="36" height="12" fill="#0d0d0d"/>
+      <rect x="84"  y="24"  width="36" height="12" fill="#0d0d0d"/>
+      <!-- MASK — top + eye row -->
+      <rect x="12"  y="36"  width="120" height="12" fill="#0d0d0d"/>
+      <!-- EYES (white slits) -->
+      <rect x="12"  y="48"  width="24"  height="12" fill="#0d0d0d"/>
+      <rect x="36"  y="48"  width="24"  height="12" fill="#d8d8d8"/>
+      <rect x="60"  y="48"  width="24"  height="12" fill="#0d0d0d"/>
+      <rect x="84"  y="48"  width="24"  height="12" fill="#d8d8d8"/>
+      <rect x="108" y="48"  width="24"  height="12" fill="#0d0d0d"/>
+      <!-- LOWER MASK EDGE (covers cheekbones, stops mid-face) -->
+      <rect x="24"  y="60"  width="96"  height="12" fill="#0d0d0d"/>
+      <!-- EXPOSED LOWER FACE (skin) -->
+      <rect x="24"  y="72"  width="96"  height="12" fill="#f0a060"/>
+      <!-- MOUTH ROW: skin + cigarette sticking right -->
+      <rect x="24"  y="84"  width="84"  height="12" fill="#f0a060"/>
+      <rect x="108" y="87"  width="24"  height="6"  fill="#e8e8e8"/>
+      <rect x="132" y="87"  width="12"  height="6"  fill="#ff6600"/>
+      <!-- CHIN -->
+      <rect x="36"  y="96"  width="72"  height="12" fill="#f0a060"/>
+      <!-- NECK -->
+      <rect x="48"  y="108" width="48"  height="12" fill="#f0a060"/>
+      <!-- SHOULDERS: skin sides, dark shirt center -->
+      <rect x="12"  y="120" width="24"  height="12" fill="#f0a060"/>
+      <rect x="36"  y="120" width="72"  height="12" fill="#2a2a2a"/>
+      <rect x="108" y="120" width="24"  height="12" fill="#f0a060"/>
+      <!-- ARMS (skin) + TORSO (dark shirt) -->
+      <rect x="0"   y="132" width="24"  height="36" fill="#f0a060"/>
+      <rect x="24"  y="132" width="96"  height="36" fill="#2a2a2a"/>
+      <rect x="120" y="132" width="24"  height="36" fill="#f0a060"/>
+      <!-- WAISTBAND -->
+      <rect x="12"  y="168" width="120" height="12" fill="#0d0d0d"/>
+      <!-- BLACK PANTS: left leg + right leg -->
+      <rect x="24"  y="180" width="42"  height="60" fill="#0d0d0d"/>
+      <rect x="78"  y="180" width="42"  height="60" fill="#0d0d0d"/>
+    </svg>
+    <div class="batman-label batman-bottom">[ CLICK ANYWHERE TO ESCAPE ]</div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

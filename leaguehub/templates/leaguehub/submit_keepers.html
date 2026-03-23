@@ -34,7 +34,7 @@
     <div class="alert alert-danger">{{ form.errors }}</div>
   {% endif %}
 
-  <p class="text-muted mb-2">Select up to 2 keepers.</p>
+  <p class="mb-2" style="color:#eaeaea">Select up to 2 keepers.</p>
 
   <table class="table table-hover align-middle">
     <thead>
@@ -51,7 +51,7 @@
         {% with pid=checkbox.data.value %}
         <tr class="keeper-row" data-player-id="{{ pid }}" data-round="{{ player_rounds|default_if_none:'' }}">
           <td>{{ checkbox.tag }}</td>
-          <td><label class="form-check-label fw-semibold" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label></td>
+          <td style="color:#222"><label class="fw-semibold" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label></td>
           <td class="text-muted small player-position"></td>
           <td class="text-muted small player-draft-round"></td>
           <td class="text-muted small player-cost"></td>

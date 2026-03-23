@@ -4,7 +4,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import KeeperSubmissionForm
-from .models import Champion, KeeperRecord, KeeperSubmission, RosterSnapshot, Season, Standing, Team, TeamAccess
+from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, RosterSnapshot, Season, Standing, Team, TeamAccess
 
 
 def home(request):
@@ -97,22 +97,29 @@ def submit_keepers_view(request):
         team=team,
     ).select_related("player").order_by("player__full_name")
 
-    # Build ineligible player info: players on this team's final roster who were kept last year
     previous_season = Season.objects.filter(year=season.year - 1).first()
+
+    # Ineligible: players on this roster who were kept last year
     ineligible = []
     if previous_season:
         roster_player_ids = RosterSnapshot.objects.filter(
             season=season, team=team, is_final_roster=True
         ).values_list("player_id", flat=True)
-
         prior_records = (
             KeeperRecord.objects.filter(season=previous_season, player_id__in=roster_player_ids)
             .select_related("player", "team")
         )
-        ineligible = [
-            {"player": r.player, "kept_by": r.team.name}
-            for r in prior_records
-        ]
+        ineligible = [{"player": r.player, "kept_by": r.team.name} for r in prior_records]
+
+    # Draft round each eligible player was picked in last season (for keeper cost display)
+    # Undrafted players default to round 10
+    player_rounds = {}
+    if previous_season:
+        picks = DraftPick.objects.filter(
+            season=previous_season,
+            player__in=form.fields["players"].queryset,
+        ).values("player_id", "round")
+        player_rounds = {p["player_id"]: p["round"] for p in picks}
 
     return render(request, "leaguehub/submit_keepers.html", {
         "season": season,
@@ -120,4 +127,5 @@ def submit_keepers_view(request):
         "form": form,
         "current_submissions": current_submissions,
         "ineligible": ineligible,
+        "player_rounds": player_rounds,
     })

@@ -115,6 +115,21 @@ class RosterSnapshot(models.Model):
         return f"{self.season.year} - {self.team.name} - {self.player.full_name}"
 
 
+class DraftPick(models.Model):
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="draft_picks")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True, related_name="draft_picks")
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, null=True, blank=True, related_name="draft_picks")
+    round = models.PositiveIntegerField()
+    pick = models.PositiveIntegerField()
+
+    class Meta:
+        unique_together = ("season", "round", "pick")
+        ordering = ["round", "pick"]
+
+    def __str__(self):
+        return f"{self.season.year} R{self.round}P{self.pick} — {self.player or 'unknown'}"
+
+
 class KeeperRecord(models.Model):
     SOURCE_CHOICES = [
         ("manual", "Manual"),

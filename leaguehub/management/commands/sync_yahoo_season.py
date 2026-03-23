@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 from leaguehub.models import Season, Team
 from leaguehub.services import (
     sync_champion_from_standings,
+    sync_draft_picks_from_yahoo,
     sync_final_roster_from_yahoo,
     sync_keepers_from_draft,
     sync_keepers_from_yahoo,
@@ -155,9 +156,14 @@ class Command(BaseCommand):
             count = sync_final_roster_from_yahoo(season, team, roster_payload)
             self.stdout.write(self.style.SUCCESS(f"Roster synced for {team.name} — {count} player(s)"))
 
+        # Draft picks (all rounds — used for keeper cost calculation)
+        draft_payload = get(f"{base}/league/{full_league_key}/draftresults")
+        pick_count = sync_draft_picks_from_yahoo(season, draft_payload)
+        self.stdout.write(self.style.SUCCESS(f"Draft picks synced for {season.year} — {pick_count} pick(s) stored"))
+
         # Keepers — try both sources; get_or_create prevents duplicates
         if options["sync_keepers"]:
-            count = sync_keepers_from_draft(season, get(f"{base}/league/{full_league_key}/draftresults"))
+            count = sync_keepers_from_draft(season, draft_payload)
             count += sync_keepers_from_yahoo(season, get(f"{base}/league/{full_league_key}/players;status=K/ownership"))
             self.stdout.write(self.style.SUCCESS(f"Keepers synced for {season.year} — {count} keeper(s) found"))
 

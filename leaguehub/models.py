@@ -7,6 +7,7 @@ from django.utils import timezone
 class Season(models.Model):
     year = models.PositiveIntegerField(unique=True)
     name = models.CharField(max_length=100, blank=True)
+    logo_url = models.URLField(max_length=500, blank=True)
     yahoo_game_key = models.CharField(max_length=50, blank=True)
     yahoo_league_key = models.CharField(max_length=100, blank=True)
     is_current = models.BooleanField(default=False)
@@ -25,7 +26,12 @@ class Season(models.Model):
 
 
 class ManagerProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
     display_name = models.CharField(max_length=100)
     yahoo_guid = models.CharField(max_length=100, blank=True)
 

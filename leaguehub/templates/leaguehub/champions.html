@@ -1,11 +1,30 @@
 {% extends "leaguehub/base.html" %}
 {% block content %}
 <h1>Champions</h1>
-<ul class="list-group">
-  {% for c in champions %}
-    <li class="list-group-item">{{ c.season.year }} — <strong>{{ c.team.name }}</strong></li>
-  {% empty %}
-    <li class="list-group-item">No data yet.</li>
-  {% endfor %}
-</ul>
+<table class="table table-striped align-middle">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Year</th>
+      <th>Team</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in champions %}
+      <tr>
+        <td style="width:48px">
+          {% if c.season.logo_url %}
+            <img src="{{ c.season.logo_url }}" alt="" height="36" style="border-radius:4px">
+          {% endif %}
+        </td>
+        <td>{{ c.season.year }}</td>
+        <td><strong>{{ c.team.name }}</strong></td>
+        <td>{{ c.notes }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4">No data yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% endblock %}

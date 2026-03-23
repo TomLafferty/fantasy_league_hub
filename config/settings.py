@@ -13,6 +13,9 @@ if not SECRET_KEY:
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
+RENDER_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_HOSTNAME)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -47,6 +50,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "leaguehub.context_processors.league_name",
             ],
         },
     },

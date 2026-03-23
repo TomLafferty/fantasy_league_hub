@@ -5,6 +5,7 @@ from .views import (
     standings_view,
     keeper_history_view,
     submit_keepers_view,
+    team_detail_view,
 )
 
 urlpatterns = [
@@ -13,4 +14,5 @@ urlpatterns = [
     path("standings/", standings_view, name="standings"),
     path("keepers/history/", keeper_history_view, name="keeper_history"),
     path("keepers/submit/", submit_keepers_view, name="submit_keepers"),
+    path("team/<int:team_id>/", team_detail_view, name="team_detail"),
 ]

@@ -1,0 +1,27 @@
+{% extends "leaguehub/base.html" %}
+{% block content %}
+<h1>{{ team.name }}</h1>
+<p class="text-muted">{{ team.season.year }} season{% if team.manager %} &mdash; {{ team.manager.display_name }}{% endif %}</p>
+
+<h2>Final Roster</h2>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Player</th>
+      <th>Position</th>
+      <th>NFL Team</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for snapshot in roster %}
+      <tr>
+        <td>{{ snapshot.player.full_name }}</td>
+        <td>{{ snapshot.player.primary_position }}</td>
+        <td>{{ snapshot.player.nfl_team }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="3">No final roster recorded for this team.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

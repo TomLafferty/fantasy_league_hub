@@ -1,5 +1,5 @@
 from decimal import Decimal
-from .models import ManagerProfile, Player, RosterSnapshot, Season, Standing, Team
+from .models import Champion, KeeperRecord, ManagerProfile, Player, RosterSnapshot, Season, Standing, Team
 
 
 def _extract_team_meta(team_meta_list: list) -> dict:
@@ -17,10 +17,16 @@ def _extract_team_meta(team_meta_list: list) -> dict:
 
 def _sync_manager_profile(team: Team, meta: dict):
     """Create or update a ManagerProfile from Yahoo team metadata and link it to the team."""
-    managers = meta.get("managers", {})
-    # Yahoo returns managers as {"0": {"manager": {...}}, ...}
+    managers = meta.get("managers", [])
     manager_data = None
-    if isinstance(managers, dict):
+    # Yahoo returns managers as a list: [{"manager": {...}}]
+    if isinstance(managers, list):
+        for item in managers:
+            if isinstance(item, dict) and "manager" in item:
+                manager_data = item["manager"]
+                break
+    # Older API versions returned a dict: {"0": {"manager": {...}}}
+    elif isinstance(managers, dict):
         for v in managers.values():
             if isinstance(v, dict) and "manager" in v:
                 manager_data = v["manager"]
@@ -70,7 +76,18 @@ def sync_standings_from_yahoo(season: Season, payload: dict):
             continue
 
         meta = _extract_team_meta(team_wrapper[0] if isinstance(team_wrapper[0], list) else [team_wrapper[0]])
-        team_standings = team_wrapper[1].get("team_standings", {})
+
+        # team_wrapper has 3 elements: [meta_list, {team_points}, {team_standings}]
+        # Search rather than assume fixed indices
+        team_standings = {}
+        team_points = {}
+        for item in team_wrapper[1:]:
+            if isinstance(item, dict):
+                if "team_standings" in item:
+                    team_standings = item["team_standings"]
+                if "team_points" in item:
+                    team_points = item["team_points"]
+
         outcomes = team_standings.get("outcome_totals", {})
 
         team_name = meta.get("name", "Unknown Team")
@@ -88,8 +105,6 @@ def sync_standings_from_yahoo(season: Season, payload: dict):
 
         _sync_manager_profile(team, meta)
 
-        team_points = team_wrapper[1].get("team_points", {})
-
         Standing.objects.update_or_create(
             season=season,
             team=team,
@@ -104,14 +119,162 @@ def sync_standings_from_yahoo(season: Season, payload: dict):
         )
 
 
-def sync_final_roster_from_yahoo(season: Season, team: Team, payload: dict):
+def sync_keepers_from_yahoo(season: Season, payload: dict) -> int:
+    """Import keepers from /league/{key}/players;status=K/ownership. Returns count created."""
+    league_list = payload.get("fantasy_content", {}).get("league", [])
+    if len(league_list) < 2:
+        return 0
+
+    players_data = league_list[1].get("players", {})
+    if isinstance(players_data, list):
+        players_data = players_data[0] if players_data else {}
+
+    count = 0
+    for key, value in players_data.items():
+        if key == "count" or not isinstance(value, dict):
+            continue
+
+        player_wrapper = value.get("player", [])
+        if not player_wrapper:
+            continue
+
+        player_meta = _extract_team_meta(
+            player_wrapper[0] if isinstance(player_wrapper[0], list) else [player_wrapper[0]]
+        )
+
+        # Ownership is in subsequent elements of player_wrapper
+        owner_team_key = ""
+        for item in player_wrapper[1:]:
+            if isinstance(item, dict) and "ownership" in item:
+                ownership = item["ownership"]
+                if isinstance(ownership, list):
+                    ownership = ownership[0] if ownership else {}
+                owner_team_key = ownership.get("owner_team_key", "")
+                break
+
+        if not owner_team_key:
+            continue
+
+        team = Team.objects.filter(season=season, yahoo_team_key=owner_team_key).first()
+        if not team:
+            continue
+
+        yahoo_player_key = player_meta.get("player_key")
+        player = Player.objects.filter(yahoo_player_key=yahoo_player_key).first()
+        if not player:
+            name_info = player_meta.get("name", {})
+            full_name = (
+                name_info.get("full") if isinstance(name_info, dict) else str(name_info)
+            ) or "Unknown Player"
+            player, _ = Player.objects.get_or_create(
+                yahoo_player_key=yahoo_player_key,
+                defaults={
+                    "yahoo_player_id": str(player_meta.get("player_id", "")),
+                    "full_name": full_name,
+                    "nfl_team": player_meta.get("editorial_team_abbr", ""),
+                    "primary_position": player_meta.get("display_position", ""),
+                },
+            )
+
+        _, created = KeeperRecord.objects.get_or_create(
+            season=season,
+            team=team,
+            player=player,
+            defaults={"source": "yahoo"},
+        )
+        if created:
+            count += 1
+
+    return count
+
+
+def sync_keepers_from_draft(season: Season, payload: dict) -> int:
+    """Import keeper picks from draft results. Returns count of keepers created."""
+    league_list = payload.get("fantasy_content", {}).get("league", [])
+    if len(league_list) < 2:
+        return 0
+
+    draft_results = league_list[1].get("draft_results", {})
+    if isinstance(draft_results, list):
+        draft_results = draft_results[0] if draft_results else {}
+
+    count = 0
+    for key, value in draft_results.items():
+        if key == "count" or not isinstance(value, dict):
+            continue
+
+        pick = value.get("draft_result", {})
+        if isinstance(pick, list):
+            pick = pick[0] if pick else {}
+
+        if pick.get("type") != "keeper":
+            continue
+
+        team_key = pick.get("team_key", "")
+        player_key = pick.get("player_key", "")
+        if not team_key or not player_key:
+            continue
+
+        team = Team.objects.filter(season=season, yahoo_team_key=team_key).first()
+        player = Player.objects.filter(yahoo_player_key=player_key).first()
+        if not team or not player:
+            continue
+
+        _, created = KeeperRecord.objects.get_or_create(
+            season=season,
+            team=team,
+            player=player,
+            defaults={"source": "yahoo"},
+        )
+        if created:
+            count += 1
+
+    return count
+
+
+def sync_champion_from_standings(season: Season):
+    """Mark the rank-1 team as champion. Only call this after the season is complete."""
+    top = Standing.objects.filter(season=season, rank=1).select_related("team").first()
+    if top:
+        Champion.objects.update_or_create(season=season, defaults={"team": top.team})
+
+
+def sync_league_metadata_from_yahoo(season: Season, payload: dict):
+    """Update season name and logo from the league info endpoint."""
+    league_list = payload.get("fantasy_content", {}).get("league", [])
+    if not league_list:
+        return
+    meta = league_list[0] if isinstance(league_list[0], dict) else {}
+    update_fields = []
+    yahoo_name = meta.get("name", "")
+    if yahoo_name:
+        formatted_name = f"{season.year} {yahoo_name}"
+        if season.name != formatted_name:
+            season.name = formatted_name
+            update_fields.append("name")
+    logo_url = meta.get("logo_url", "")
+    if logo_url and season.logo_url != logo_url:
+        season.logo_url = logo_url
+        update_fields.append("logo_url")
+    if update_fields:
+        season.save(update_fields=update_fields)
+
+
+
+
+def sync_final_roster_from_yahoo(season: Season, team: Team, payload: dict) -> int:
     # Yahoo returns: fantasy_content.team = [meta_list, resources_dict]
     team_list = payload.get("fantasy_content", {}).get("team", [])
     if len(team_list) < 2:
-        return
+        return 0
 
-    players_data = team_list[1].get("roster", {}).get("players", {})
+    roster = team_list[1].get("roster", {})
+    # Yahoo nests players under roster["players"] or roster["0"]["players"]
+    players_data = roster.get("players") or roster.get("0", {}).get("players", {})
+    if isinstance(players_data, list):
+        players_data = players_data[0] if players_data else {}
 
+    count = 0
     for key, value in players_data.items():
         if key == "count" or not isinstance(value, dict):
             continue
@@ -150,3 +313,6 @@ def sync_final_roster_from_yahoo(season: Season, team: Team, payload: dict):
             week=0,
             defaults={"is_final_roster": True},
         )
+        count += 1
+
+    return count

@@ -1,0 +1,18 @@
+{% extends "leaguehub/base.html" %}
+{% block content %}
+<h1>Fantasy League Hub</h1>
+<p>League history, standings, keepers, and manager tools.</p>
+
+{% if current_season %}
+  <p><strong>Current season:</strong> {{ current_season.year }}</p>
+{% endif %}
+
+<h3>Recent Champions</h3>
+<ul class="list-group">
+  {% for c in recent_champions %}
+    <li class="list-group-item">{{ c.season.year }} — <strong>{{ c.team.name }}</strong></li>
+  {% empty %}
+    <li class="list-group-item">No champions entered yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

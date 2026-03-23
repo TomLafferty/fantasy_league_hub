@@ -2,6 +2,7 @@ services:
   - type: web
     name: fantasy-league-hub
     runtime: python
+    region: virginia
     buildCommand: "./build.sh"
     startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
     plan: free
@@ -19,4 +20,5 @@ services:
 
 databases:
   - name: fantasy-league-hub-db
+    region: virginia
     plan: free

@@ -3,7 +3,7 @@ services:
     name: fantasy-league-hub
     runtime: python
     buildCommand: "./build.sh"
-    startCommand: "gunicorn config.wsgi:application"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
     plan: free
     envVars:
       - key: SECRET_KEY

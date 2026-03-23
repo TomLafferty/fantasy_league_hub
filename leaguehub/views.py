@@ -1,10 +1,12 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.db.models import Count, Q
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import KeeperSubmissionForm
-from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, RosterSnapshot, Season, Standing, Team, TeamAccess
+from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
 
 
 def home(request):
@@ -59,6 +61,77 @@ def team_detail_view(request, team_id):
     return render(request, "leaguehub/team_detail.html", {
         "team": team,
         "roster": roster,
+    })
+
+
+def constitution_view(request):
+    return render(request, "leaguehub/constitution.html")
+
+
+def rules_view(request):
+    proposals = (
+        RuleProposal.objects
+        .annotate(
+            up_count=Count("votes", filter=Q(votes__vote="up")),
+            down_count=Count("votes", filter=Q(votes__vote="down")),
+        )
+        .order_by("-up_count", "-created_at")
+    )
+    user_votes = {}
+    if request.user.is_authenticated:
+        user_votes = {
+            v.proposal_id: v.vote
+            for v in RuleVote.objects.filter(user=request.user, proposal__in=proposals)
+        }
+    return render(request, "leaguehub/new_rules.html", {
+        "proposals": proposals,
+        "user_votes": user_votes,
+    })
+
+
+@login_required
+def submit_rule_view(request):
+    if request.method == "POST":
+        description = request.POST.get("description", "").strip()
+        if description:
+            RuleProposal.objects.create(submitted_by=request.user, description=description)
+            messages.success(request, "Rule proposal submitted.")
+        else:
+            messages.error(request, "Description cannot be empty.")
+    return redirect("rules")
+
+
+@login_required
+@require_POST
+def vote_rule_view(request, proposal_id):
+    proposal = get_object_or_404(RuleProposal, id=proposal_id)
+    vote_value = request.POST.get("vote")
+    if vote_value not in ("up", "down"):
+        return JsonResponse({"error": "invalid"}, status=400)
+
+    existing = RuleVote.objects.filter(proposal=proposal, user=request.user).first()
+    if existing:
+        if existing.vote == vote_value:
+            existing.delete()
+        else:
+            existing.vote = vote_value
+            existing.save()
+    else:
+        RuleVote.objects.create(proposal=proposal, user=request.user, vote=vote_value)
+
+    down_count = RuleVote.objects.filter(proposal=proposal, vote="down").count()
+    if down_count >= 9:
+        proposal.delete()
+        return JsonResponse({"deleted": True})
+
+    up_count = RuleVote.objects.filter(proposal=proposal, vote="up").count()
+    down_count = RuleVote.objects.filter(proposal=proposal, vote="down").count()
+    user_vote_obj = RuleVote.objects.filter(proposal=proposal, user=request.user).first()
+    return JsonResponse({
+        "deleted": False,
+        "up_count": up_count,
+        "down_count": down_count,
+        "user_vote": user_vote_obj.vote if user_vote_obj else None,
     })
 
 

@@ -164,6 +164,32 @@ class TeamAccess(models.Model):
         return f"{self.user.username} -> {self.team.name} ({self.season.year})"
 
 
+class RuleProposal(models.Model):
+    description = models.TextField()
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="rule_proposals",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.submitted_by.username}: {self.description[:60]}"
+
+
+class RuleVote(models.Model):
+    VOTE_CHOICES = [("up", "up"), ("down", "down")]
+    proposal = models.ForeignKey(RuleProposal, on_delete=models.CASCADE, related_name="votes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="rule_votes")
+    vote = models.CharField(max_length=4, choices=VOTE_CHOICES)
+
+    class Meta:
+        unique_together = ("proposal", "user")
+
+
 class KeeperSubmission(models.Model):
     season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="keeper_submissions")
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="keeper_submissions")

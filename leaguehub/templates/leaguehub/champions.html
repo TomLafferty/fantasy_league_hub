@@ -1,6 +1,9 @@
 {% extends "leaguehub/base.html" %}
+{% block title %}Champions — {{ league_name }} Hub{% endblock %}
+{% block nav_champions %}active{% endblock %}
 {% block content %}
 <h1>Champions</h1>
+<div class="table-responsive">
 <table class="table table-striped align-middle">
   <thead>
     <tr>
@@ -27,4 +30,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

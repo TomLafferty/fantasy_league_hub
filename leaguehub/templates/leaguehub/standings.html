@@ -1,4 +1,6 @@
 {% extends "leaguehub/base.html" %}
+{% block title %}Standings — {{ league_name }} Hub{% endblock %}
+{% block nav_standings %}active{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center gap-3 mb-3">
   {% if selected_season.logo_url %}
@@ -15,6 +17,7 @@
   </select>
 </form>
 
+<div class="table-responsive">
 <table class="table table-striped">
   <thead>
     <tr>
@@ -37,4 +40,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

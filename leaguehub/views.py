@@ -75,7 +75,7 @@ def submit_keepers_view(request):
     team = access.team
 
     if request.method == "POST":
-        form = KeeperSubmissionForm(request.POST, season=season, team=team, max_keepers=3)
+        form = KeeperSubmissionForm(request.POST, season=season, team=team, max_keepers=2)
         if form.is_valid():
             form.save(request.user)
             messages.success(request, "Keepers submitted.")
@@ -88,7 +88,7 @@ def submit_keepers_view(request):
         form = KeeperSubmissionForm(
             season=season,
             team=team,
-            max_keepers=3,
+            max_keepers=2,
             initial={"players": existing_ids},
         )
 

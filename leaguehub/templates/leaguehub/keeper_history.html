@@ -1,4 +1,6 @@
 {% extends "leaguehub/base.html" %}
+{% block title %}Keeper History — {{ league_name }} Hub{% endblock %}
+{% block nav_history %}active{% endblock %}
 {% block content %}
 <h1>Keeper History</h1>
 
@@ -10,6 +12,7 @@
   </select>
 </form>
 
+<div class="table-responsive">
 <table class="table table-striped">
   <thead>
     <tr>
@@ -32,4 +35,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

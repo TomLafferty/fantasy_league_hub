@@ -1,9 +1,11 @@
 {% extends "leaguehub/base.html" %}
+{% block title %}{{ team.name }} — {{ league_name }} Hub{% endblock %}
 {% block content %}
 <h1>{{ team.name }}</h1>
 <p class="text-muted">{{ team.season.year }} season{% if team.manager %} &mdash; {{ team.manager.display_name }}{% endif %}</p>
 
 <h2>Final Roster</h2>
+<div class="table-responsive">
 <table class="table table-striped">
   <thead>
     <tr>
@@ -24,4 +26,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

@@ -117,7 +117,7 @@ def submit_keepers_view(request):
     if previous_season:
         picks = DraftPick.objects.filter(
             season=previous_season,
-            player__in=form.fields["players"].queryset,
+            player__isnull=False,
         ).values("player_id", "round")
         player_rounds = {p["player_id"]: p["round"] for p in picks}
 

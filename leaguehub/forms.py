@@ -18,16 +18,28 @@ class KeeperSubmissionForm(forms.Form):
 
         previous_season = Season.objects.filter(year=season.year - 1).first()
         prior_keeper_ids = []
+        previous_team = None
         if previous_season:
             prior_keeper_ids = list(
                 KeeperRecord.objects.filter(season=previous_season).values_list("player_id", flat=True)
             )
+            # Match the team from the previous season by name (placeholder teams share the same name)
+            previous_team = Team.objects.filter(season=previous_season, name=team.name).first()
 
-        eligible_ids = RosterSnapshot.objects.filter(
-            season=season,
-            team=team,
-            is_final_roster=True,
-        ).exclude(player_id__in=prior_keeper_ids).values_list("player_id", flat=True)
+        # Eligible players come from the previous season's final roster.
+        # If the current season already has roster snapshots (post-sync), use those instead.
+        current_roster_ids = RosterSnapshot.objects.filter(
+            season=season, team=team, is_final_roster=True,
+        ).values_list("player_id", flat=True)
+
+        if current_roster_ids.exists():
+            eligible_ids = current_roster_ids.exclude(player_id__in=prior_keeper_ids) if prior_keeper_ids else current_roster_ids
+        elif previous_team:
+            eligible_ids = RosterSnapshot.objects.filter(
+                season=previous_season, team=previous_team, is_final_roster=True,
+            ).exclude(player_id__in=prior_keeper_ids).values_list("player_id", flat=True)
+        else:
+            eligible_ids = []
 
         self.fields["players"].queryset = Player.objects.filter(id__in=eligible_ids).order_by("full_name")
 

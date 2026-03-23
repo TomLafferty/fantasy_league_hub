@@ -11,6 +11,11 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--season", type=int, required=True)
         parser.add_argument("--access-token", type=str, required=True)
+        parser.add_argument(
+            "--full-league-key",
+            type=str,
+            help="Override the league key (e.g. 449.l.46828). Skips game/league key lookup from the Season record.",
+        )
 
     def handle(self, *args, **options):
         season_year = options["season"]
@@ -19,17 +24,27 @@ class Command(BaseCommand):
         season = Season.objects.filter(year=season_year).first()
         if not season:
             raise CommandError("Season not found.")
-        if not season.yahoo_league_key:
-            raise CommandError("Season.yahoo_league_key is blank.")
+
+        if options["full_league_key"]:
+            full_league_key = options["full_league_key"]
+        else:
+            if not season.yahoo_game_key:
+                raise CommandError("Season.yahoo_game_key is blank. Set it or pass --full-league-key.")
+            if not season.yahoo_league_key:
+                raise CommandError("Season.yahoo_league_key is blank. Set it or pass --full-league-key.")
+            full_league_key = f"{season.yahoo_game_key}.l.{season.yahoo_league_key}"
 
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
         }
 
-        standings_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{season.yahoo_league_key}/standings"
+        standings_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{full_league_key}/standings"
         standings_response = requests.get(standings_url, headers=headers, params={"format": "json"}, timeout=30)
-        standings_response.raise_for_status()
+        if not standings_response.ok:
+            raise CommandError(
+                f"Yahoo API error {standings_response.status_code} for {standings_url}\n{standings_response.text}"
+            )
         sync_standings_from_yahoo(season, standings_response.json())
         self.stdout.write(self.style.SUCCESS(f"Standings synced for {season.year}"))
 

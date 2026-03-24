@@ -1,0 +1,495 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}The FFUPA Hall — {{ league_name }} Hub{% endblock %}
+{% block nav_hall %}active{% endblock %}
+{% block content %}
+<h1>The FFUPA Hall</h1>
+<p class="mb-3" style="color:#eaeaea">Where legends are made, and suffering is documented for eternity.</p>
+
+<style>
+  .nav-tabs { border-bottom: 2px solid rgba(0,210,55,.3); }
+  .nav-tabs .nav-link { color: #888; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; font-size:.75rem; }
+  .nav-tabs .nav-link:hover { color: #00dd44; border-bottom-color: rgba(0,210,55,.4); }
+  .nav-tabs .nav-link.active { color: #00dd44; border-bottom: 2px solid #00dd44; background: transparent; }
+  .hall-section { margin-bottom: 2rem; }
+  .hall-section h5 { color: #00dd44; border-bottom: 1px solid rgba(0,210,55,.2); padding-bottom: .4rem; margin-bottom: .75rem; }
+  .no-data { color: #555; font-style: italic; font-size:.85rem; }
+  .year-badge { background: rgba(0,210,55,.12); color: #00dd44; padding: 1px 6px; border-radius: 2px; font-size:.75rem; margin: 1px; display:inline-block; }
+</style>
+
+<!-- Tab nav -->
+<ul class="nav nav-tabs mb-4" id="hallTabs">
+  <li class="nav-item"><a class="nav-link active" href="#hof" data-bs-toggle="tab">🏆 Hall of Fame</a></li>
+  <li class="nav-item"><a class="nav-link" href="#hos" data-bs-toggle="tab">💀 Hall of Shame</a></li>
+  <li class="nav-item"><a class="nav-link" href="#bvb" data-bs-toggle="tab">🥊 Bro vs Bro</a></li>
+  <li class="nav-item"><a class="nav-link" href="#keepers" data-bs-toggle="tab">🔒 Keeper Legends</a></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- ════════════════ HALL OF FAME ════════════════ -->
+  <div class="tab-pane fade show active" id="hof">
+
+    <div class="hall-section">
+      <h5>Most Championships</h5>
+      {% if most_championships %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Titles</th><th>Years</th></tr></thead>
+        <tbody>
+          {% for c in most_championships %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><strong>{{ c.name }}</strong></td>
+            <td>{{ c.years|length }}</td>
+            <td>{% for y in c.years %}<span class="year-badge">{{ y }}</span>{% endfor %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No champions on record yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Most Points in a Season</h5>
+      {% if top_points_for %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Points For</th></tr></thead>
+        <tbody>
+          {% for s in top_points_for %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.points_for }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No standings data yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Most Wins in a Season</h5>
+      {% if top_wins %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>W</th><th>L</th></tr></thead>
+        <tbody>
+          {% for s in top_wins %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.wins }}</strong></td><td>{{ s.losses }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Best Defense — Lowest Points Allowed in a Season</h5>
+      {% if best_defense %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Points Against</th></tr></thead>
+        <tbody>
+          {% for s in best_defense %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.points_against }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Highest Points For — Without a Championship</h5>
+      <p class="no-data mb-2">The eternal bridesmaid.</p>
+      {% if highest_pf_no_title %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Points For</th><th>Finish</th></tr></thead>
+        <tbody>
+          {% for s in highest_pf_no_title %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.points_for }}</strong></td><td>#{{ s.rank }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    {% if cumulative_all %}
+    <div class="hall-section">
+      <h5>All-Time Points — Regular Season &amp; Playoffs</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Total Points</th></tr></thead>
+        <tbody>
+          {% for c in cumulative_all %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ c.name }}</strong></td><td><strong>{{ c.all }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="hall-section">
+      <h5>All-Time Points — Playoffs Only</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Playoff Points</th></tr></thead>
+        <tbody>
+          {% for c in cumulative_playoff %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ c.name }}</strong></td><td><strong>{{ c.playoff }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="hall-section">
+      <h5>All-Time Points — Regular Season Only</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Regular Season Points</th></tr></thead>
+        <tbody>
+          {% for c in cumulative_regular %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ c.name }}</strong></td><td><strong>{{ c.regular }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <hr style="border-color:rgba(0,210,55,.15)">
+    <h4 class="mb-3" style="color:#eaeaea">Single-Week Records</h4>
+
+    {% if not has_matchup_data %}
+    <div class="alert alert-secondary">Week-by-week records require matchup data. Run <code>python manage.py sync_matchups --season YEAR --access-token TOKEN</code> for each completed season.</div>
+    {% else %}
+
+    <div class="hall-section">
+      <h5>Highest Single-Week Score</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Year</th><th>Week</th><th>Score</th><th>Opponent</th><th>Opp Score</th></tr></thead>
+        <tbody>
+          {% for e in highest_score %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.winner }}</strong></td><td>{{ e.year }}</td><td>{{ e.week }}</td><td><strong>{{ e.winner_score }}</strong></td><td>{{ e.loser }}</td><td>{{ e.loser_score }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="hall-section">
+      <h5>Largest Margin of Victory</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Winner</th><th>Score</th><th>Loser</th><th>Score</th><th>Margin</th><th>Year</th><th>Week</th></tr></thead>
+        <tbody>
+          {% for e in biggest_margin %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.winner }}</strong></td><td>{{ e.winner_score }}</td><td>{{ e.loser }}</td><td>{{ e.loser_score }}</td><td><strong>+{{ e.margin }}</strong></td><td>{{ e.year }}</td><td>{{ e.week }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="hall-section">
+      <h5>Highest Score That Still Lost — The Cursed Week</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Victim</th><th>Their Score</th><th>Year</th><th>Week</th><th>Opponent</th><th>Opp Score</th></tr></thead>
+        <tbody>
+          {% for e in highest_losing_score %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.loser }}</strong></td><td><strong>{{ e.loser_score }}</strong></td><td>{{ e.year }}</td><td>{{ e.week }}</td><td>{{ e.winner }}</td><td>{{ e.winner_score }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="hall-section">
+      <h5>Longest Winning Streak</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Win Streak</th></tr></thead>
+        <tbody>
+          {% for e in longest_win_streak %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.manager }}</strong></td><td>{{ e.team }}</td><td>{{ e.year }}</td><td><strong>{{ e.streak }}W</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if best_playoff_score %}
+    <div class="hall-section">
+      <h5>Most Points Scored in a Playoff Game</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Score</th><th>Year</th><th>Week</th><th>Opponent</th></tr></thead>
+        <tbody>
+          {% for e in best_playoff_score %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.winner }}</strong></td><td><strong>{{ e.winner_score }}</strong></td><td>{{ e.year }}</td><td>{{ e.week }}</td><td>{{ e.loser }} ({{ e.loser_score }})</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% endif %}
+  </div>
+
+  <!-- ════════════════ HALL OF SHAME ════════════════ -->
+  <div class="tab-pane fade" id="hos">
+
+    <div class="hall-section">
+      <h5>Most Losses in a Season</h5>
+      {% if most_losses %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>L</th><th>W</th></tr></thead>
+        <tbody>
+          {% for s in most_losses %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.losses }}</strong></td><td>{{ s.wins }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Lowest Points in a Season</h5>
+      {% if worst_points_for %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Points For</th></tr></thead>
+        <tbody>
+          {% for s in worst_points_for %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.points_for }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Most Points Allowed in a Season — Got Cooked</h5>
+      {% if worst_defense %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Points Against</th></tr></thead>
+        <tbody>
+          {% for s in worst_defense %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.points_against }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Highest Points For — Didn't Even Make Playoffs</h5>
+      {% if highest_pf_no_playoffs %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Points For</th><th>Record</th></tr></thead>
+        <tbody>
+          {% for s in highest_pf_no_playoffs %}
+          <tr><td>{{ forloop.counter }}</td><td>{{ s.team.manager.display_name|default:s.team.name }}</td><td>{{ s.team.name }}</td><td>{{ s.season.year }}</td><td><strong>{{ s.points_for }}</strong></td><td>{{ s.wins }}-{{ s.losses }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Last-Place Finishes — Hall of the Fallen</h5>
+      {% if most_last_place %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Last-Place Finishes</th><th>Years</th></tr></thead>
+        <tbody>
+          {% for m in most_last_place %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><strong>{{ m.name }}</strong></td>
+            <td>{{ m.count }}</td>
+            <td>{% for y in m.years %}<span class="year-badge">{{ y }}</span>{% endfor %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No data yet.</p>{% endif %}
+    </div>
+
+    <hr style="border-color:rgba(0,210,55,.15)">
+    <h4 class="mb-3" style="color:#eaeaea">Single-Week Records</h4>
+
+    {% if not has_matchup_data %}
+    <div class="alert alert-secondary">Week-by-week records require matchup data. Run <code>python manage.py sync_matchups --season YEAR --access-token TOKEN</code> for each completed season.</div>
+    {% else %}
+
+    <div class="hall-section">
+      <h5>Lowest Single-Week Score</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Score</th><th>Year</th><th>Week</th><th>Opponent</th><th>Opp Score</th></tr></thead>
+        <tbody>
+          {% for e in lowest_score %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.loser }}</strong></td><td><strong>{{ e.loser_score }}</strong></td><td>{{ e.year }}</td><td>{{ e.week }}</td><td>{{ e.winner }}</td><td>{{ e.winner_score }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="hall-section">
+      <h5>Worst Loss Margin — Most Embarrassing Defeat</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Loser</th><th>Score</th><th>Winner</th><th>Score</th><th>Margin</th><th>Year</th><th>Week</th></tr></thead>
+        <tbody>
+          {% for e in worst_margin %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.loser }}</strong></td><td>{{ e.loser_score }}</td><td>{{ e.winner }}</td><td>{{ e.winner_score }}</td><td><strong>-{{ e.margin }}</strong></td><td>{{ e.year }}</td><td>{{ e.week }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="hall-section">
+      <h5>Longest Losing Streak</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Loss Streak</th></tr></thead>
+        <tbody>
+          {% for e in longest_loss_streak %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.manager }}</strong></td><td>{{ e.team }}</td><td>{{ e.year }}</td><td><strong>{{ e.streak }}L</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if lowest_playoff_score %}
+    <div class="hall-section">
+      <h5>Lowest Score in a Playoff Elimination Game</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Score</th><th>Year</th><th>Week</th><th>Eliminated By</th></tr></thead>
+        <tbody>
+          {% for e in lowest_playoff_score %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.loser }}</strong></td><td><strong>{{ e.loser_score }}</strong></td><td>{{ e.year }}</td><td>{{ e.week }}</td><td>{{ e.winner }} ({{ e.winner_score }})</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% endif %}
+  </div>
+
+  <!-- ════════════════ BRO VS BRO ════════════════ -->
+  <div class="tab-pane fade" id="bvb">
+    <p class="mb-3" style="color:#eaeaea">All-time head-to-head records between managers, sorted by dominance.</p>
+
+    {% if not has_matchup_data %}
+    <div class="alert alert-secondary">Bro vs Bro requires matchup data. Run <code>python manage.py sync_matchups --season YEAR --access-token TOKEN</code> for each completed season.</div>
+    {% elif bro_vs_bro %}
+    <div class="mb-3" style="max-width:280px">
+      <select id="bvb-filter" class="form-select form-select-sm">
+        <option value="">All Rivalries</option>
+        {% for r in bro_vs_bro %}
+          <option value="{{ r.mgr_a }}">{{ r.mgr_a }}</option>
+          <option value="{{ r.mgr_b }}">{{ r.mgr_b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <table class="table table-striped table-hover" id="bvb-table">
+      <thead>
+        <tr>
+          <th>Rivalry</th>
+          <th style="text-align:center">{{ bro_vs_bro.0.mgr_a }} Wins</th>
+          <th style="text-align:center">{{ bro_vs_bro.0.mgr_b }} Wins</th>
+          <th style="text-align:center">Ties</th>
+          <th style="text-align:center">Games</th>
+          <th>"Owns"</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in bro_vs_bro %}
+        <tr data-mgr-a="{{ r.mgr_a }}" data-mgr-b="{{ r.mgr_b }}">
+          <td><strong>{{ r.mgr_a }}</strong> vs <strong>{{ r.mgr_b }}</strong></td>
+          <td style="text-align:center">{{ r.a_wins }}</td>
+          <td style="text-align:center">{{ r.b_wins }}</td>
+          <td style="text-align:center">{{ r.ties }}</td>
+          <td style="text-align:center">{{ r.total }}</td>
+          <td>
+            {% if r.leader_wins > r.leader_losses %}
+              <strong style="color:#00dd44">{{ r.leader }}</strong>
+              <span class="no-data">({{ r.leader_wins }}-{{ r.leader_losses }})</span>
+            {% else %}
+              <span class="no-data">Even</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <script>
+      // Deduplicate the manager dropdown
+      const sel = document.getElementById('bvb-filter');
+      const seen = new Set();
+      [...sel.options].forEach(opt => {
+        if (!opt.value) return;
+        if (seen.has(opt.value)) opt.remove();
+        else seen.add(opt.value);
+      });
+      // Sort alphabetically (after "All Rivalries")
+      const opts = [...sel.options].slice(1).sort((a, b) => a.value.localeCompare(b.value));
+      opts.forEach(o => sel.appendChild(o));
+
+      sel.addEventListener('change', () => {
+        const val = sel.value;
+        document.querySelectorAll('#bvb-table tbody tr').forEach(row => {
+          if (!val || row.dataset.mgrA === val || row.dataset.mgrB === val) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        });
+      });
+    </script>
+    {% else %}
+    <p class="no-data">No head-to-head data yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- ════════════════ KEEPER LEGENDS ════════════════ -->
+  <div class="tab-pane fade" id="keepers">
+    <p class="mb-3" style="color:#eaeaea">Players who have been hoarded, coveted, and kept across the ages.</p>
+
+    <div class="hall-section">
+      <h5>Dynasty Players — Most Times Kept All-Time</h5>
+      {% if keeper_legends %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Player</th><th>Times Kept</th><th>By # of Managers</th><th>Kept By</th></tr></thead>
+        <tbody>
+          {% for k in keeper_legends %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><strong>{{ k.name }}</strong></td>
+            <td>{{ k.count }}</td>
+            <td>{{ k.team_count }}</td>
+            <td>{% for t in k.teams %}<span class="year-badge">{{ t }}</span>{% endfor %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No keeper history yet.</p>{% endif %}
+    </div>
+
+    <div class="hall-section">
+      <h5>Most Coveted — Kept by the Most Different Managers</h5>
+      {% if team_spread %}
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Player</th><th>Managers</th><th>Times Kept</th></tr></thead>
+        <tbody>
+          {% for k in team_spread %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><strong>{{ k.name }}</strong></td>
+            <td>{{ k.team_count }}</td>
+            <td>{{ k.count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="no-data">No keeper history yet.</p>{% endif %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Activate tab from URL hash, default to first tab
+const hash = window.location.hash || '#hof';
+const tabEl = document.querySelector(`#hallTabs a[href="${hash}"]`);
+if (tabEl) {
+  new bootstrap.Tab(tabEl).show();
+} else {
+  new bootstrap.Tab(document.querySelector('#hallTabs a')).show();
+}
+
+// Update hash on tab change
+document.querySelectorAll('#hallTabs a[data-bs-toggle="tab"]').forEach(el => {
+  el.addEventListener('shown.bs.tab', e => {
+    history.replaceState(null, '', e.target.getAttribute('href'));
+  });
+});
+</script>
+{% endblock %}

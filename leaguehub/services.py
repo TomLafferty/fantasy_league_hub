@@ -1,5 +1,5 @@
 from decimal import Decimal
-from .models import Champion, DraftPick, KeeperRecord, ManagerProfile, Player, RosterSnapshot, Season, Standing, Team
+from .models import Champion, DraftPick, KeeperRecord, Matchup, ManagerProfile, Player, RosterSnapshot, Season, Standing, Team
 
 
 def _extract_team_meta(team_meta_list: list) -> dict:
@@ -353,5 +353,92 @@ def sync_final_roster_from_yahoo(season: Season, team: Team, payload: dict) -> i
             defaults={"is_final_roster": True},
         )
         count += 1
+
+    return count
+
+
+def sync_matchups_from_yahoo(season: Season, week: int, payload: dict) -> int:
+    """Store matchups from a weekly scoreboard response. Returns count stored."""
+    league_list = payload.get("fantasy_content", {}).get("league", [])
+    if len(league_list) < 2:
+        return 0
+
+    scoreboard_wrapper = league_list[1].get("scoreboard", {})
+    if isinstance(scoreboard_wrapper, list):
+        scoreboard_wrapper = scoreboard_wrapper[0] if scoreboard_wrapper else {}
+
+    # Yahoo nests matchups under scoreboard["0"]["matchups"], not scoreboard["matchups"]
+    inner = scoreboard_wrapper.get("0", scoreboard_wrapper)
+    matchups_data = inner.get("matchups", {})
+    if isinstance(matchups_data, list):
+        matchups_data = matchups_data[0] if matchups_data else {}
+
+    count = 0
+    for key, value in matchups_data.items():
+        if key == "count" or not isinstance(value, dict):
+            continue
+
+        # Yahoo returns matchup as a dict, not a list
+        matchup_data = value.get("matchup", {})
+        if isinstance(matchup_data, list):
+            matchup_data = matchup_data[0] if matchup_data else {}
+        if not matchup_data:
+            continue
+
+        is_playoff = str(matchup_data.get("is_playoffs", "0")) == "1"
+        is_consolation = str(matchup_data.get("is_consolation", "0")) == "1"
+        # Teams are nested under matchup["0"]["teams"], not matchup["teams"]
+        matchup_inner = matchup_data.get("0", matchup_data)
+        teams_data = matchup_inner.get("teams", {})
+
+        if not teams_data:
+            continue
+
+        team_entries = []
+        for tkey, tvalue in teams_data.items():
+            if tkey == "count" or not isinstance(tvalue, dict):
+                continue
+            team_wrapper = tvalue.get("team", [])
+            if not team_wrapper:
+                continue
+
+            meta = _extract_team_meta(
+                team_wrapper[0] if isinstance(team_wrapper[0], list) else [team_wrapper[0]]
+            )
+            score = Decimal("0")
+            for item in team_wrapper[1:]:
+                if isinstance(item, dict) and "team_points" in item:
+                    tp = item["team_points"]
+                    if isinstance(tp, list):
+                        tp = tp[0] if tp else {}
+                    score = Decimal(str(tp.get("total", "0") or "0"))
+                    break
+
+            team_key = meta.get("team_key", "")
+            team = Team.objects.filter(season=season, yahoo_team_key=team_key).first()
+            if team:
+                team_entries.append((team, score))
+
+        if len(team_entries) == 2:
+            team_a, score_a = team_entries[0]
+            team_b, score_b = team_entries[1]
+            # Normalize order so unique_together works regardless of API ordering
+            if team_a.pk > team_b.pk:
+                team_a, team_b = team_b, team_a
+                score_a, score_b = score_b, score_a
+
+            Matchup.objects.update_or_create(
+                season=season,
+                week=week,
+                team_a=team_a,
+                team_b=team_b,
+                defaults={
+                    "score_a": score_a,
+                    "score_b": score_b,
+                    "is_playoff": is_playoff,
+                    "is_consolation": is_consolation,
+                },
+            )
+            count += 1
 
     return count

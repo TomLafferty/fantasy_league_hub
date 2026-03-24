@@ -1,3 +1,4 @@
+import time
 import requests
 from django.core.management.base import BaseCommand, CommandError
 
@@ -60,6 +61,12 @@ class Command(BaseCommand):
             default=False,
             help="Print raw responses from candidate keeper endpoints and exit.",
         )
+        parser.add_argument(
+            "--debug-draft",
+            action="store_true",
+            default=False,
+            help="Print the raw draftresults response structure and exit.",
+        )
 
     def handle(self, *args, **options):
         season_year = options["season"]
@@ -81,10 +88,20 @@ class Command(BaseCommand):
         headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
 
         def get(url, **params):
-            r = requests.get(url, headers=headers, params={"format": "json", **params}, timeout=30)
-            if not r.ok:
-                raise CommandError(f"Yahoo API error {r.status_code} for {url}\n{r.text}")
-            return r.json()
+            for attempt in range(3):
+                r = requests.get(url, headers=headers, params={"format": "json", **params}, timeout=30)
+                if r.status_code == 429 or (r.ok and not r.text.strip()):
+                    wait = 10 * (attempt + 1)
+                    self.stdout.write(f"  Rate limited / empty response, retrying in {wait}s...")
+                    time.sleep(wait)
+                    continue
+                if not r.ok:
+                    raise CommandError(f"Yahoo API error {r.status_code} for {url}\n{r.text[:500]}")
+                try:
+                    return r.json()
+                except Exception:
+                    raise CommandError(f"Yahoo returned non-JSON (HTTP {r.status_code}) for {url}.\nRaw: {r.text[:500]}")
+            raise CommandError(f"Yahoo rate-limited after 3 attempts for {url}. Token may have expired.")
 
         base = "https://fantasysports.yahooapis.com/fantasy/v2"
 
@@ -116,25 +133,36 @@ class Command(BaseCommand):
 
         if options["debug_keepers"]:
             import json
-            candidates = [
-                f"{base}/league/{full_league_key}/players;status=K",
-                f"{base}/league/{full_league_key}/players;status=kept",
-                f"{base}/league/{full_league_key}/draftpicks",
-                f"{base}/league/{full_league_key}/transactions;types=keeper",
-            ]
-            for url in candidates:
-                self.stdout.write(f"\n--- {url} ---")
-                try:
-                    r = requests.get(url, headers=headers, params={"format": "json"}, timeout=30)
-                    if r.ok:
-                        league_l = r.json().get("fantasy_content", {}).get("league", [])
-                        resources = league_l[1] if len(league_l) > 1 else {}
-                        self.stdout.write(f"keys: {list(resources.keys())}")
-                        self.stdout.write(json.dumps(resources, indent=2)[:1000])
-                    else:
-                        self.stdout.write(f"HTTP {r.status_code}: {r.text[:200]}")
-                except Exception as e:
-                    self.stdout.write(f"Error: {e}")
+            # Test the actual ownership URL used by the sync
+            ownership_url = f"{base}/league/{full_league_key}/players;status=K/ownership"
+            self.stdout.write(f"\n--- {ownership_url} ---")
+            try:
+                r = requests.get(ownership_url, headers=headers, params={"format": "json"}, timeout=30)
+                if r.ok:
+                    league_l = r.json().get("fantasy_content", {}).get("league", [])
+                    players_data = league_l[1].get("players", {}) if len(league_l) > 1 else {}
+                    self.stdout.write(f"players count: {players_data.get('count', '?')}")
+                    # Show ownership portion of first 3 player entries (skip meta list)
+                    shown = 0
+                    for k, v in players_data.items():
+                        if k == "count" or not isinstance(v, dict):
+                            continue
+                        pw = v.get("player", [])
+                        name = "unknown"
+                        if pw and isinstance(pw[0], list):
+                            for item in pw[0]:
+                                if isinstance(item, dict) and "name" in item:
+                                    name = item["name"].get("full", "unknown")
+                                    break
+                        self.stdout.write(f"\nPlayer {k} ({name}) — ownership section:")
+                        self.stdout.write(json.dumps(pw[1:], indent=2)[:2000])
+                        shown += 1
+                        if shown >= 3:
+                            break
+                else:
+                    self.stdout.write(f"HTTP {r.status_code}: {r.text[:400]}")
+            except Exception as e:
+                self.stdout.write(f"Error: {e}")
             return
 
         # Final rosters
@@ -158,6 +186,15 @@ class Command(BaseCommand):
 
         # Draft picks (all rounds — used for keeper cost calculation)
         draft_payload = get(f"{base}/league/{full_league_key}/draftresults")
+
+        if options["debug_draft"]:
+            import json
+            league_list = draft_payload.get("fantasy_content", {}).get("league", [])
+            resources = league_list[1] if len(league_list) > 1 else {}
+            self.stdout.write(f"resources keys: {list(resources.keys())}")
+            self.stdout.write(json.dumps(resources, indent=2)[:4000])
+            return
+
         pick_count = sync_draft_picks_from_yahoo(season, draft_payload)
         self.stdout.write(self.style.SUCCESS(f"Draft picks synced for {season.year} — {pick_count} pick(s) stored"))
 

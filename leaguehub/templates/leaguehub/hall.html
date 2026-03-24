@@ -351,6 +351,23 @@
     {% endif %}
 
     {% endif %}
+
+    {% if has_player_data and bench_disasters %}
+    <div class="hall-section">
+      <h5>Most Points Left on Bench — The Bill Kinney Doesn't Exist Award</h5>
+      <p class="no-data mb-2">The art of winning on the waiver wire but losing in your own lineup.</p>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Manager</th><th>Team</th><th>Year</th><th>Week</th><th>Bench Points</th></tr></thead>
+        <tbody>
+          {% for e in bench_disasters %}
+          <tr><td>{{ forloop.counter }}</td><td><strong>{{ e.manager }}</strong></td><td>{{ e.team }}</td><td>{{ e.year }}</td><td>{{ e.week }}</td><td><strong>{{ e.bench_pts }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% elif not has_player_data %}
+    <div class="alert alert-secondary mt-3">Bench point records require player stat data. Run <code>python manage.py sync_player_scores --season YEAR --access-token TOKEN</code>.</div>
+    {% endif %}
   </div>
 
   <!-- ════════════════ BRO VS BRO ════════════════ -->
@@ -471,6 +488,117 @@
       </table>
       {% else %}<p class="no-data">No keeper history yet.</p>{% endif %}
     </div>
+
+    {% if has_player_data and best_player_game %}
+    <div class="hall-section">
+      <h5>Highest-Scoring Single Player Performance</h5>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Player</th><th>Manager</th><th>Year</th><th>Week</th><th>Points</th><th>Role</th></tr></thead>
+        <tbody>
+          {% for s in best_player_game %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><strong>{{ s.player.full_name }}</strong></td>
+            <td>{{ s.team.manager.display_name|default:s.team.name }}</td>
+            <td>{{ s.season.year }}</td>
+            <td>{{ s.week }}</td>
+            <td><strong>{{ s.points }}</strong></td>
+            <td>{% if s.is_starter %}Starter{% else %}<span style="color:#d86060">Bench</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% if best_draft_picks %}
+    <div class="hall-section">
+      <h5>Best &amp; Worst Draft Pick by Round</h5>
+      <p class="no-data mb-2">Season total points scored by the player taken in each round.</p>
+      <div class="d-flex gap-2 mb-3 flex-wrap">
+        <select id="dp-season-filter" class="form-select form-select-sm" style="max-width:160px">
+          <option value="">All Seasons</option>
+          {% for yr in draft_pick_seasons %}<option value="{{ yr }}">{{ yr }}</option>{% endfor %}
+        </select>
+        <select id="dp-manager-filter" class="form-select form-select-sm" style="max-width:200px">
+          <option value="">All Managers</option>
+          {% for m in draft_pick_managers %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <h6 style="color:#00dd44">Best Pick Each Round</h6>
+          <table class="table table-striped table-hover" id="best-dp-table">
+            <thead><tr><th>Round</th><th>Player</th><th>Manager</th><th>Year</th><th>Season Pts</th></tr></thead>
+            <tbody>
+              {% for r in best_draft_picks %}
+              <tr data-year="{{ r.year }}" data-manager="{{ r.manager }}">
+                <td>{{ r.round }}</td>
+                <td><strong>{{ r.player }}</strong></td>
+                <td>{{ r.manager }}</td>
+                <td>{{ r.year }}</td>
+                <td><strong>{{ r.season_pts }}</strong></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="col-md-6">
+          <h6 style="color:#d86060">Worst Pick Each Round</h6>
+          <table class="table table-striped table-hover" id="worst-dp-table">
+            <thead><tr><th>Round</th><th>Player</th><th>Manager</th><th>Year</th><th>Season Pts</th></tr></thead>
+            <tbody>
+              {% for r in worst_draft_picks %}
+              <tr data-year="{{ r.year }}" data-manager="{{ r.manager }}">
+                <td>{{ r.round }}</td>
+                <td><strong>{{ r.player }}</strong></td>
+                <td>{{ r.manager }}</td>
+                <td>{{ r.year }}</td>
+                <td><strong>{{ r.season_pts }}</strong></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <script>
+        function applyDpFilters() {
+          const yr  = document.getElementById('dp-season-filter').value;
+          const mgr = document.getElementById('dp-manager-filter').value;
+          ['best-dp-table', 'worst-dp-table'].forEach(tid => {
+            document.querySelectorAll(`#${tid} tbody tr`).forEach(row => {
+              const yearOk = !yr  || row.dataset.year    === yr;
+              const mgrOk  = !mgr || row.dataset.manager === mgr;
+              row.style.display = (yearOk && mgrOk) ? '' : 'none';
+            });
+          });
+        }
+        document.getElementById('dp-season-filter').addEventListener('change', applyDpFilters);
+        document.getElementById('dp-manager-filter').addEventListener('change', applyDpFilters);
+      </script>
+    </div>
+    {% endif %}
+
+    {% if prized_keepers %}
+    <div class="hall-section">
+      <h5>Most Prized Keepers — Best Player Season After Being Kept</h5>
+      <p class="no-data mb-2">Proof that some holds age like fine wine.</p>
+      <table class="table table-striped table-hover">
+        <thead><tr><th>#</th><th>Player</th><th>Kept By</th><th>Season</th><th>Season Points</th></tr></thead>
+        <tbody>
+          {% for k in prized_keepers %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><strong>{{ k.player }}</strong></td>
+            <td>{{ k.manager }}</td>
+            <td>{{ k.year }}</td>
+            <td><strong>{{ k.season_pts }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
   </div>
 
 </div>

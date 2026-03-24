@@ -208,6 +208,23 @@ class Matchup(models.Model):
         return f"{self.season.year} W{self.week}: {self.team_a.name} {self.score_a} vs {self.team_b.name} {self.score_b}"
 
 
+class PlayerWeeklyScore(models.Model):
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="player_weekly_scores")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="player_weekly_scores")
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="weekly_scores")
+    week = models.PositiveIntegerField()
+    points = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    is_starter = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ("season", "team", "player", "week")
+        ordering = ["season__year", "week", "-points"]
+
+    def __str__(self):
+        role = "starter" if self.is_starter else "bench"
+        return f"{self.season.year} W{self.week}: {self.player.full_name} ({self.team.name}) {self.points}pts [{role}]"
+
+
 class KeeperSubmission(models.Model):
     season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="keeper_submissions")
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="keeper_submissions")
@@ -228,12 +245,25 @@ class KeeperSubmission(models.Model):
         ).exists():
             raise ValidationError(f"{self.player.full_name} was a keeper last year and is not eligible.")
 
+        # Check current season roster first; fall back to previous season's
+        # final roster (which is the source of truth when keepers are submitted
+        # before the new season's rosters have been synced).
         on_final_roster = RosterSnapshot.objects.filter(
             season=self.season,
             team=self.team,
             player=self.player,
             is_final_roster=True,
         ).exists()
+
+        if not on_final_roster and previous_season:
+            prev_team = Team.objects.filter(season=previous_season, name=self.team.name).first()
+            if prev_team:
+                on_final_roster = RosterSnapshot.objects.filter(
+                    season=previous_season,
+                    team=prev_team,
+                    player=self.player,
+                    is_final_roster=True,
+                ).exists()
 
         if not on_final_roster:
             raise ValidationError(f"{self.player.full_name} was not on the final roster for this team.")

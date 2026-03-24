@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
@@ -6,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import KeeperSubmissionForm
-from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
+from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, Matchup, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
 
 
 def home(request):
@@ -132,6 +134,256 @@ def vote_rule_view(request, proposal_id):
         "up_count": up_count,
         "down_count": down_count,
         "user_vote": user_vote_obj.vote if user_vote_obj else None,
+    })
+
+
+def hall_view(request):
+    def mgr_name(team):
+        return team.manager.display_name if team and team.manager else (team.name if team else "Unknown")
+
+    # Load all standings (exclude seasons with zero games played = placeholder seasons)
+    all_standings = list(
+        Standing.objects
+        .select_related("team__manager", "season")
+        .exclude(wins=0, losses=0, ties=0)
+        .order_by("season__year", "rank")
+    )
+    played_standings = [s for s in all_standings if s.wins + s.losses + s.ties > 0]
+
+    all_champions = list(Champion.objects.select_related("team__manager", "season").all())
+
+    # ── HOF SEASON ──
+    top_points_for = sorted(played_standings, key=lambda s: s.points_for, reverse=True)[:10]
+    top_wins = sorted(played_standings, key=lambda s: (s.wins, s.points_for), reverse=True)[:10]
+    best_defense = sorted(played_standings, key=lambda s: s.points_against)[:10]  # lowest PA = best
+
+    champ_counts = defaultdict(lambda: {"name": "", "years": []})
+    for c in all_champions:
+        name = mgr_name(c.team)
+        champ_counts[name]["name"] = name
+        champ_counts[name]["years"].append(c.season.year)
+    most_championships = sorted(champ_counts.values(), key=lambda x: len(x["years"]), reverse=True)
+
+    season_max_rank = defaultdict(int)
+    for s in played_standings:
+        if s.rank > season_max_rank[s.season_id]:
+            season_max_rank[s.season_id] = s.rank
+
+    last_place_mgr = defaultdict(lambda: {"name": "", "count": 0, "years": []})
+    for s in played_standings:
+        if season_max_rank.get(s.season_id) and s.rank == season_max_rank[s.season_id]:
+            name = mgr_name(s.team)
+            last_place_mgr[name]["name"] = name
+            last_place_mgr[name]["count"] += 1
+            last_place_mgr[name]["years"].append(s.season.year)
+    most_last_place = sorted(last_place_mgr.values(), key=lambda x: x["count"], reverse=True)
+
+    champion_season_team = {c.season_id: c.team_id for c in all_champions}
+    no_title_standings = [s for s in played_standings if champion_season_team.get(s.season_id) != s.team_id]
+    highest_pf_no_title = sorted(no_title_standings, key=lambda s: s.points_for, reverse=True)[:10]
+
+    # ── HOS SEASON ──
+    worst_points_for = sorted(played_standings, key=lambda s: s.points_for)[:10]
+    most_losses = sorted(played_standings, key=lambda s: (s.losses, -float(s.points_for)), reverse=True)[:10]
+    worst_defense = sorted(played_standings, key=lambda s: s.points_against, reverse=True)[:10]
+    no_playoff_standings = [s for s in played_standings if s.final_place is None]
+    highest_pf_no_playoffs = sorted(no_playoff_standings, key=lambda s: s.points_for, reverse=True)[:10]
+
+    # ── MATCHUP RECORDS ──
+    has_matchup_data = Matchup.objects.exists()
+    highest_score = biggest_margin = highest_losing_score = longest_win_streak = best_playoff_score = None
+    lowest_score = worst_margin = longest_loss_streak = lowest_playoff_score = None
+    cumulative_all = cumulative_playoff = cumulative_regular = None
+    bro_vs_bro = []
+
+    if has_matchup_data:
+        all_matchups = list(
+            Matchup.objects.select_related("team_a__manager", "team_b__manager", "season")
+            .order_by("season__year", "week")
+        )
+
+        # Build a flat list of score events
+        score_events = []
+        for m in all_matchups:
+            if m.score_a >= m.score_b:
+                w_team, w_score, l_team, l_score = m.team_a, m.score_a, m.team_b, m.score_b
+            else:
+                w_team, w_score, l_team, l_score = m.team_b, m.score_b, m.team_a, m.score_a
+            margin = w_score - l_score
+            score_events.append({
+                "matchup": m,
+                "winner": mgr_name(w_team),
+                "loser": mgr_name(l_team),
+                "winner_score": w_score,
+                "loser_score": l_score,
+                "margin": margin,
+                "year": m.season.year,
+                "week": m.week,
+                "is_playoff": m.is_playoff,
+                "is_consolation": m.is_consolation,
+            })
+
+        highest_score = sorted(score_events, key=lambda x: x["winner_score"], reverse=True)[:10]
+        biggest_margin = sorted(score_events, key=lambda x: x["margin"], reverse=True)[:10]
+        highest_losing_score = sorted(score_events, key=lambda x: x["loser_score"], reverse=True)[:10]
+        lowest_score = sorted(score_events, key=lambda x: x["loser_score"])[:10]
+        worst_margin = biggest_margin  # same data, loser's perspective
+
+        # Playoffs only — exclude consolation bracket entirely
+        playoff_events = [e for e in score_events if e["is_playoff"] and not e["is_consolation"]]
+        if playoff_events:
+            best_playoff_score = sorted(playoff_events, key=lambda x: x["winner_score"], reverse=True)[:10]
+            lowest_playoff_score = sorted(playoff_events, key=lambda x: x["loser_score"])[:10]
+
+        # Cumulative all-time points by manager (consolation excluded throughout)
+        from decimal import Decimal as D
+        cum = defaultdict(lambda: {"name": "", "all": D(0), "playoff": D(0), "regular": D(0)})
+        for m in all_matchups:
+            if m.is_consolation:
+                continue
+            for team, score in [(m.team_a, m.score_a), (m.team_b, m.score_b)]:
+                name = mgr_name(team)
+                cum[name]["name"] = name
+                cum[name]["all"] += score
+                if m.is_playoff:
+                    cum[name]["playoff"] += score
+                else:
+                    cum[name]["regular"] += score
+        cumulative_all = sorted(cum.values(), key=lambda x: x["all"], reverse=True)
+        cumulative_playoff = sorted(cum.values(), key=lambda x: x["playoff"], reverse=True)
+        cumulative_regular = sorted(cum.values(), key=lambda x: x["regular"], reverse=True)
+
+        # Streaks — per (season, team), find max consecutive W or L
+        season_team_results = defaultdict(list)
+        team_obj_map = {}
+        season_obj_map = {}
+        for m in all_matchups:
+            ka = (m.season_id, m.team_a_id)
+            kb = (m.season_id, m.team_b_id)
+            if m.score_a > m.score_b:
+                season_team_results[ka].append("W")
+                season_team_results[kb].append("L")
+            elif m.score_b > m.score_a:
+                season_team_results[ka].append("L")
+                season_team_results[kb].append("W")
+            else:
+                season_team_results[ka].append("T")
+                season_team_results[kb].append("T")
+            team_obj_map[ka] = m.team_a
+            team_obj_map[kb] = m.team_b
+            season_obj_map[m.season_id] = m.season
+
+        def max_streak(results, target):
+            mx = cur = 0
+            for r in results:
+                cur = cur + 1 if r == target else 0
+                mx = max(mx, cur)
+            return mx
+
+        win_streaks, loss_streaks = [], []
+        for key, results in season_team_results.items():
+            team = team_obj_map.get(key)
+            season_obj = season_obj_map.get(key[0])
+            if not team or not season_obj:
+                continue
+            ws = max_streak(results, "W")
+            ls = max_streak(results, "L")
+            entry = {"manager": mgr_name(team), "team": team.name, "year": season_obj.year}
+            if ws:
+                win_streaks.append({**entry, "streak": ws})
+            if ls:
+                loss_streaks.append({**entry, "streak": ls})
+
+        longest_win_streak = sorted(win_streaks, key=lambda x: x["streak"], reverse=True)[:10]
+        longest_loss_streak = sorted(loss_streaks, key=lambda x: x["streak"], reverse=True)[:10]
+
+        # Bro vs Bro — head-to-head by manager
+        h2h = defaultdict(lambda: {"a_wins": 0, "b_wins": 0, "ties": 0})
+        for m in all_matchups:
+            ma = mgr_name(m.team_a)
+            mb = mgr_name(m.team_b)
+            sa, sb = m.score_a, m.score_b
+            if ma > mb:
+                ma, mb = mb, ma
+                sa, sb = sb, sa
+            key = (ma, mb)
+            if sa > sb:
+                h2h[key]["a_wins"] += 1
+            elif sb > sa:
+                h2h[key]["b_wins"] += 1
+            else:
+                h2h[key]["ties"] += 1
+
+        for (ma, mb), rec in h2h.items():
+            total = rec["a_wins"] + rec["b_wins"] + rec["ties"]
+            if rec["a_wins"] >= rec["b_wins"]:
+                leader, trailer, lw, ll = ma, mb, rec["a_wins"], rec["b_wins"]
+            else:
+                leader, trailer, lw, ll = mb, ma, rec["b_wins"], rec["a_wins"]
+            bro_vs_bro.append({
+                "mgr_a": ma, "mgr_b": mb,
+                "a_wins": rec["a_wins"], "b_wins": rec["b_wins"], "ties": rec["ties"],
+                "total": total,
+                "leader": leader, "trailer": trailer,
+                "leader_wins": lw, "leader_losses": ll,
+                "dominance": abs(rec["a_wins"] - rec["b_wins"]),
+            })
+        bro_vs_bro = sorted(bro_vs_bro, key=lambda x: (x["dominance"], x["total"]), reverse=True)
+
+    # ── KEEPER LEGENDS ──
+    all_keepers = list(KeeperRecord.objects.select_related("player", "team__manager").all())
+    keeper_map = defaultdict(lambda: {"name": "", "count": 0, "teams": set()})
+    for kr in all_keepers:
+        pname = kr.player.full_name
+        keeper_map[pname]["name"] = pname
+        keeper_map[pname]["count"] += 1
+        keeper_map[pname]["teams"].add(mgr_name(kr.team))
+    keeper_legends_raw = sorted(keeper_map.values(), key=lambda x: x["count"], reverse=True)[:15]
+    keeper_legends = []
+    for kl in keeper_legends_raw:
+        keeper_legends.append({
+            "name": kl["name"],
+            "count": kl["count"],
+            "team_count": len(kl["teams"]),
+            "teams": sorted(kl["teams"]),
+        })
+    team_spread = sorted(keeper_legends, key=lambda x: x["team_count"], reverse=True)[:10]
+
+    return render(request, "leaguehub/hall.html", {
+        # HOF Season
+        "top_points_for": top_points_for,
+        "top_wins": top_wins,
+        "best_defense": best_defense,
+        "most_championships": most_championships,
+        "most_last_place": most_last_place,
+        "highest_pf_no_title": highest_pf_no_title,
+        # HOF Week
+        "highest_score": highest_score,
+        "biggest_margin": biggest_margin,
+        "highest_losing_score": highest_losing_score,
+        "longest_win_streak": longest_win_streak,
+        "best_playoff_score": best_playoff_score,
+        # HOS Season
+        "worst_points_for": worst_points_for,
+        "most_losses": most_losses,
+        "worst_defense": worst_defense,
+        "highest_pf_no_playoffs": highest_pf_no_playoffs,
+        # HOS Week
+        "lowest_score": lowest_score,
+        "worst_margin": worst_margin,
+        "longest_loss_streak": longest_loss_streak,
+        "lowest_playoff_score": lowest_playoff_score,
+        # Cumulative points
+        "cumulative_all": cumulative_all,
+        "cumulative_playoff": cumulative_playoff,
+        "cumulative_regular": cumulative_regular,
+        # Bro vs Bro
+        "bro_vs_bro": bro_vs_bro,
+        # Keeper Legends
+        "keeper_legends": keeper_legends,
+        "team_spread": team_spread,
+        # Meta
+        "has_matchup_data": has_matchup_data,
     })
 
 

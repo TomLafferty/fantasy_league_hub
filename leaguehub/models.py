@@ -190,6 +190,24 @@ class RuleVote(models.Model):
         unique_together = ("proposal", "user")
 
 
+class Matchup(models.Model):
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="matchups")
+    week = models.PositiveIntegerField()
+    team_a = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="matchups_as_a")
+    team_b = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="matchups_as_b")
+    score_a = models.DecimalField(max_digits=8, decimal_places=2)
+    score_b = models.DecimalField(max_digits=8, decimal_places=2)
+    is_playoff = models.BooleanField(default=False)
+    is_consolation = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("season", "week", "team_a", "team_b")
+        ordering = ["season__year", "week"]
+
+    def __str__(self):
+        return f"{self.season.year} W{self.week}: {self.team_a.name} {self.score_a} vs {self.team_b.name} {self.score_b}"
+
+
 class KeeperSubmission(models.Model):
     season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="keeper_submissions")
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="keeper_submissions")

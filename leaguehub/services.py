@@ -1,5 +1,5 @@
 from decimal import Decimal
-from .models import Champion, DraftPick, KeeperRecord, Matchup, ManagerProfile, Player, RosterSnapshot, Season, Standing, Team
+from .models import Champion, DraftPick, KeeperRecord, Matchup, ManagerProfile, Player, PlayerWeeklyScore, RosterSnapshot, Season, Standing, Team
 
 
 def _extract_team_meta(team_meta_list: list) -> dict:
@@ -440,5 +440,91 @@ def sync_matchups_from_yahoo(season: Season, week: int, payload: dict) -> int:
                 },
             )
             count += 1
+
+    return count
+
+
+def sync_player_scores_from_yahoo(season: Season, team: Team, week: int, payload: dict) -> int:
+    """Store player weekly scores from a team roster+stats response. Returns count stored."""
+    team_list = payload.get("fantasy_content", {}).get("team", [])
+    if len(team_list) < 2:
+        return 0
+
+    roster = team_list[1].get("roster", {})
+    # Yahoo nests players under roster["0"]["players"] or roster["players"]
+    inner = roster.get("0", roster)
+    players_data = inner.get("players", {})
+    if isinstance(players_data, list):
+        players_data = players_data[0] if players_data else {}
+
+    count = 0
+    for key, value in players_data.items():
+        if key == "count" or not isinstance(value, dict):
+            continue
+
+        player_wrapper = value.get("player", [])
+        if not player_wrapper:
+            continue
+
+        # player_wrapper is a list: [meta_list, points_dict, position_dict, ...]
+        meta = _extract_team_meta(
+            player_wrapper[0] if isinstance(player_wrapper[0], list) else [player_wrapper[0]]
+        )
+
+        points = Decimal("0")
+        is_starter = True
+
+        for item in player_wrapper[1:]:
+            if not isinstance(item, dict):
+                continue
+            # Points
+            if "player_points" in item:
+                pp = item["player_points"]
+                if isinstance(pp, list):
+                    pp = pp[0] if pp else {}
+                points = Decimal(str(pp.get("total", "0") or "0"))
+            # Starting position — "BN" = bench, "IR" = injured reserve
+            # selected_position is a list of dicts: [{coverage_type/week}, {position}, {is_flex}]
+            if "selected_position" in item:
+                sp = item["selected_position"]
+                pos = ""
+                if isinstance(sp, list):
+                    for sp_item in sp:
+                        if isinstance(sp_item, dict) and "position" in sp_item:
+                            pos = sp_item["position"]
+                            break
+                elif isinstance(sp, dict):
+                    pos = sp.get("position", "")
+                is_starter = pos not in ("BN", "IR")
+
+        yahoo_player_key = meta.get("player_key", "")
+        if not yahoo_player_key:
+            continue
+
+        player = Player.objects.filter(yahoo_player_key=yahoo_player_key).first()
+        if not player:
+            name_info = meta.get("name", {})
+            full_name = (
+                name_info.get("full") if isinstance(name_info, dict)
+                else str(name_info)
+            ) or "Unknown Player"
+            player, _ = Player.objects.get_or_create(
+                yahoo_player_key=yahoo_player_key,
+                defaults={
+                    "yahoo_player_id": str(meta.get("player_id", "")),
+                    "full_name": full_name,
+                    "nfl_team": meta.get("editorial_team_abbr", ""),
+                    "primary_position": meta.get("display_position", ""),
+                },
+            )
+
+        PlayerWeeklyScore.objects.update_or_create(
+            season=season,
+            team=team,
+            player=player,
+            week=week,
+            defaults={"points": points, "is_starter": is_starter},
+        )
+        count += 1
 
     return count

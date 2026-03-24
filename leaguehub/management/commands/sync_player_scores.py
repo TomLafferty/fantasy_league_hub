@@ -2,19 +2,19 @@ import time
 import requests
 from django.core.management.base import BaseCommand, CommandError
 
-from leaguehub.models import Season
-from leaguehub.services import sync_matchups_from_yahoo
+from leaguehub.models import Season, Team
+from leaguehub.services import sync_player_scores_from_yahoo
 
 
 class Command(BaseCommand):
-    help = "Sync all weekly matchup scores for a season from Yahoo"
+    help = "Sync weekly player scores (points + starter/bench status) for all teams in a season"
 
     def add_arguments(self, parser):
         parser.add_argument("--season", type=int, required=True)
         parser.add_argument("--access-token", type=str, required=True)
         parser.add_argument("--full-league-key", type=str, help="Override league key, e.g. 449.l.46828")
-        parser.add_argument("--weeks", type=str, help="Comma-separated weeks to sync, e.g. '1,2,3'. Defaults to 1 through end_week.")
-        parser.add_argument("--debug-week", type=int, help="Print raw scoreboard JSON for this week and exit.")
+        parser.add_argument("--weeks", type=str, help="Comma-separated weeks, e.g. '1,2,3'. Defaults to 1 through end_week.")
+        parser.add_argument("--debug-team-week", type=str, help="Print raw roster+stats JSON for 'team_key:week', e.g. '449.l.8026.t.1:1'")
 
     def handle(self, *args, **options):
         season_year = options["season"]
@@ -51,6 +51,28 @@ class Command(BaseCommand):
 
         base = "https://fantasysports.yahooapis.com/fantasy/v2"
 
+        if options.get("debug_team_week"):
+            import json
+            parts = options["debug_team_week"].split(":")
+            if len(parts) != 2:
+                raise CommandError("--debug-team-week must be 'team_key:week', e.g. '449.l.8026.t.1:1'")
+            team_key, week_str = parts
+            payload = get(f"{base}/team/{team_key}/roster;week={week_str}/players/points;type=week;week={week_str}")
+            team_list = payload.get("fantasy_content", {}).get("team", [])
+            self.stdout.write(f"team_list length: {len(team_list)}")
+            resources = team_list[1] if len(team_list) > 1 else {}
+            roster = resources.get("roster", {})
+            self.stdout.write(f"roster keys: {list(roster.keys()) if isinstance(roster, dict) else type(roster).__name__}")
+            inner = roster.get("0", roster)
+            players_data = inner.get("players", {}) if isinstance(inner, dict) else {}
+            first_key = next((k for k in players_data if k != "count"), None)
+            if first_key:
+                self.stdout.write(f"\nFirst player entry:")
+                self.stdout.write(json.dumps(players_data[first_key], indent=2)[:3000])
+            else:
+                self.stdout.write(json.dumps(resources, indent=2)[:3000])
+            return
+
         # Determine weeks
         if options.get("weeks"):
             weeks = [int(w.strip()) for w in options["weeks"].split(",")]
@@ -60,33 +82,16 @@ class Command(BaseCommand):
             end_week = int(league_meta.get("end_week", 16))
             weeks = list(range(1, end_week + 1))
 
-        if options.get("debug_week"):
-            import json
-            w = options["debug_week"]
-            payload = get(f"{base}/league/{full_league_key}/scoreboard;week={w}")
-            league_list = payload.get("fantasy_content", {}).get("league", [])
-            self.stdout.write(f"league_list length: {len(league_list)}")
-            resources = league_list[1] if len(league_list) > 1 else {}
-            self.stdout.write(f"resources keys: {list(resources.keys())}")
-            scoreboard = resources.get("scoreboard", {})
-            self.stdout.write(f"scoreboard type: {type(scoreboard).__name__}, keys: {list(scoreboard.keys()) if isinstance(scoreboard, dict) else 'n/a'}")
-            matchups = scoreboard.get("matchups", {}) if isinstance(scoreboard, dict) else {}
-            self.stdout.write(f"matchups type: {type(matchups).__name__}, keys: {list(matchups.keys()) if isinstance(matchups, dict) else 'n/a'}")
-            # Show first matchup entry raw
-            first_key = next((k for k in matchups if k != "count"), None) if isinstance(matchups, dict) else None
-            if first_key:
-                self.stdout.write(f"\nFirst matchup entry (key={first_key}):")
-                self.stdout.write(json.dumps(matchups[first_key], indent=2)[:3000])
-            else:
-                self.stdout.write("\nFull resources dump:")
-                self.stdout.write(json.dumps(resources, indent=2)[:4000])
-            return
-
+        teams = Team.objects.filter(season=season).exclude(yahoo_team_key="")
         total = 0
         for week in weeks:
-            payload = get(f"{base}/league/{full_league_key}/scoreboard;week={week}")
-            n = sync_matchups_from_yahoo(season, week, payload)
-            self.stdout.write(f"  Week {week}: {n} matchup(s) synced")
-            total += n
+            week_total = 0
+            for team in teams:
+                url = f"{base}/team/{team.yahoo_team_key}/roster;week={week}/players/points;type=week;week={week}"
+                payload = get(url)
+                n = sync_player_scores_from_yahoo(season, team, week, payload)
+                week_total += n
+            self.stdout.write(f"  Week {week}: {week_total} player score(s) stored")
+            total += week_total
 
-        self.stdout.write(self.style.SUCCESS(f"\nDone. {total} matchup(s) stored for {season.year}."))
+        self.stdout.write(self.style.SUCCESS(f"\nDone. {total} player week score(s) stored for {season.year}."))

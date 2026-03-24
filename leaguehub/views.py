@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import KeeperSubmissionForm
-from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, Matchup, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
+from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, Matchup, PlayerWeeklyScore, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
 
 
 def home(request):
@@ -349,6 +349,97 @@ def hall_view(request):
         })
     team_spread = sorted(keeper_legends, key=lambda x: x["team_count"], reverse=True)[:10]
 
+    # ── PLAYER STAT RECORDS ──
+    has_player_data = PlayerWeeklyScore.objects.exists()
+    bench_disasters = []
+    best_player_game = []
+    best_draft_picks = []
+    worst_draft_picks = []
+    draft_pick_seasons = []
+    draft_pick_managers = []
+    prized_keepers = []
+
+    if has_player_data:
+        from decimal import Decimal as D
+
+        all_scores = list(
+            PlayerWeeklyScore.objects
+            .select_related("season", "team__manager", "player")
+            .all()
+        )
+
+        # ── Most bench points in a week (Bill Kinney Award) ──
+        bench_by_week = defaultdict(lambda: {"manager": "", "team": "", "year": 0, "week": 0, "bench_pts": D(0)})
+        for s in all_scores:
+            if not s.is_starter:
+                key = (s.season_id, s.team_id, s.week)
+                entry = bench_by_week[key]
+                entry["manager"] = mgr_name(s.team)
+                entry["team"] = s.team.name
+                entry["year"] = s.season.year
+                entry["week"] = s.week
+                entry["bench_pts"] += s.points
+        bench_disasters = sorted(bench_by_week.values(), key=lambda x: x["bench_pts"], reverse=True)[:15]
+
+        # ── Highest single-player performance ──
+        best_player_game = sorted(all_scores, key=lambda s: s.points, reverse=True)[:15]
+
+        # ── Best/worst draft pick by round ──
+        all_picks = list(
+            DraftPick.objects
+            .select_related("season", "team__manager", "player")
+            .filter(player__isnull=False)
+            .all()
+        )
+        # Build season totals per player per season
+        player_season_pts = defaultdict(D)
+        for s in all_scores:
+            player_season_pts[(s.player_id, s.season_id)] += s.points
+
+        pick_records = []
+        for pick in all_picks:
+            total = player_season_pts.get((pick.player_id, pick.season_id), D(0))
+            pick_records.append({
+                "player": pick.player.full_name,
+                "manager": mgr_name(pick.team) if pick.team else "Unknown",
+                "year": pick.season.year,
+                "season_id": pick.season_id,
+                "round": pick.round,
+                "pick": pick.pick,
+                "season_pts": total,
+            })
+
+        draft_pick_seasons = sorted({r["year"] for r in pick_records}, reverse=True)
+        draft_pick_managers = sorted({r["manager"] for r in pick_records if r["manager"] != "Unknown"})
+
+        # Best per round (across all seasons/managers)
+        by_round = defaultdict(list)
+        for r in pick_records:
+            by_round[r["round"]].append(r)
+        best_draft_picks = [
+            max(picks, key=lambda x: x["season_pts"])
+            for picks in sorted(by_round.values(), key=lambda p: p[0]["round"])
+        ]
+        worst_draft_picks = [
+            min(picks, key=lambda x: x["season_pts"])
+            for picks in sorted(by_round.values(), key=lambda p: p[0]["round"])
+        ]
+
+        # ── Most prized keepers — best player season after being kept ──
+        all_keeper_records = list(
+            KeeperRecord.objects.select_related("season", "team__manager", "player").all()
+        )
+        keeper_season_rows = []
+        for kr in all_keeper_records:
+            pts = player_season_pts.get((kr.player_id, kr.season_id), D(0))
+            keeper_season_rows.append({
+                "player": kr.player.full_name,
+                "manager": mgr_name(kr.team),
+                "year": kr.season.year,
+                "season_pts": pts,
+            })
+        prized_keepers = sorted(keeper_season_rows, key=lambda x: x["season_pts"], reverse=True)[:15]
+
     return render(request, "leaguehub/hall.html", {
         # HOF Season
         "top_points_for": top_points_for,
@@ -384,6 +475,14 @@ def hall_view(request):
         "team_spread": team_spread,
         # Meta
         "has_matchup_data": has_matchup_data,
+        "has_player_data": has_player_data,
+        "bench_disasters": bench_disasters,
+        "best_player_game": best_player_game,
+        "best_draft_picks": best_draft_picks,
+        "worst_draft_picks": worst_draft_picks,
+        "draft_pick_seasons": draft_pick_seasons,
+        "draft_pick_managers": draft_pick_managers,
+        "prized_keepers": prized_keepers,
     })
 
 

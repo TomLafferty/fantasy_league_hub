@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     home,
     champions_view,
+    commissioner_keepers_view,
     constitution_view,
     draft_add_comment_view,
     draft_add_media_view,
@@ -35,6 +36,7 @@ urlpatterns = [
     path("rules/<int:proposal_id>/vote/", vote_rule_view, name="vote_rule"),
     path("standings/", standings_view, name="standings"),
     path("keepers/history/", keeper_history_view, name="keeper_history"),
+    path("keepers/review/", commissioner_keepers_view, name="commissioner_keepers"),
     path("keepers/submit/", submit_keepers_view, name="submit_keepers"),
     path("team/<int:team_id>/", team_detail_view, name="team_detail"),
 ]

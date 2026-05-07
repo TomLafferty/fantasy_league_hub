@@ -1,0 +1,62 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Keeper Review — {{ league_name }} Hub{% endblock %}
+{% block nav_keeper_review %}active{% endblock %}
+{% block content %}
+<h1>Keeper Review</h1>
+<p class="text-muted">{{ season.name }} &mdash; all team submissions</p>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Team / Owner</th>
+        <th>Keeper</th>
+        <th>Draft Round</th>
+        <th>Pick Cost</th>
+        {% if is_official %}<th></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in team_data %}
+        {% if entry.submitted %}
+          {% for p in entry.players %}
+            <tr>
+              {% if forloop.first %}
+                <td rowspan="{{ entry.players|length }}" class="align-top fw-semibold">
+                  {{ entry.team.name }}
+                </td>
+              {% endif %}
+              <td>{{ p.player.full_name }}</td>
+              <td class="text-muted small">
+                {% if p.undrafted %}Undrafted (R10){% else %}Round {{ p.round }}{% endif %}
+              </td>
+              <td class="text-muted small">{{ p.cost }}</td>
+              {% if forloop.first and is_official %}
+                <td rowspan="{{ entry.players|length }}" class="align-top text-end">
+                  <form method="post" onsubmit="return confirm('Clear {{ entry.team.name }}\'s submission?')">
+                    {% csrf_token %}
+                    <input type="hidden" name="clear_team_id" value="{{ entry.team.id }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Clear</button>
+                  </form>
+                </td>
+              {% elif is_official and not forloop.first %}
+                {# extra rows for same team — no action cell needed (covered by rowspan) #}
+              {% endif %}
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td class="fw-semibold">{{ entry.team.name }}</td>
+            <td colspan="3" class="text-muted fst-italic">Not yet submitted</td>
+            {% if is_official %}<td></td>{% endif %}
+          </tr>
+        {% endif %}
+      {% empty %}
+        <tr><td colspan="{% if is_official %}5{% else %}4{% endif %}" class="text-muted">No teams found for this season.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<a href="{% url 'submit_keepers' %}" class="btn btn-outline-secondary btn-sm mt-2">&larr; Submit Keepers</a>
+{% endblock %}

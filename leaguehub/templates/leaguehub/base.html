@@ -224,7 +224,10 @@
         <a class="nav-link {% block nav_champions %}{% endblock %}" href="/champions/">Champions</a>
         <a class="nav-link {% block nav_standings %}{% endblock %}" href="/standings/">Standings</a>
         <a class="nav-link {% block nav_history %}{% endblock %}" href="/keepers/history/">Keeper History</a>
-        <a class="nav-link {% block nav_submit %}{% endblock %}" href="/keepers/submit/">Submit Keepers</a>
+        {% if user.is_authenticated %}
+          <a class="nav-link {% block nav_keeper_review %}{% endblock %}" href="/keepers/review/">Keeper Review</a>
+          <a class="nav-link {% block nav_submit %}{% endblock %}" href="/keepers/submit/">Submit Keepers</a>
+        {% endif %}
         <a class="nav-link {% block nav_drafts %}{% endblock %}" href="/drafts/">Drafts</a>
         <a class="nav-link {% block nav_constitution %}{% endblock %}" href="/constitution/">Constitution</a>
         <a class="nav-link {% block nav_hall %}{% endblock %}" href="/hall/">The FFUPA Hall</a>

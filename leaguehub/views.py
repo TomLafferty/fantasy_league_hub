@@ -282,6 +282,8 @@ def hottest_coldest_view(request):
                 for g in games:
                     g.setdefault("margin", round(abs(g["score"] - g["opponent_score"]), 2))
                 avg = round(sum(g["margin"] for g in games) / count, 2)
+                first_date = week_to_approx_date(games[0]["year"], games[0]["week"])
+                last_date = week_to_approx_date(games[-1]["year"], games[-1]["week"])
                 record = {
                     "manager": mgr_name_str,
                     "streak_count": count,
@@ -290,6 +292,7 @@ def hottest_coldest_view(request):
                     "first_week": games[0]["week"],
                     "last_year": games[-1]["year"],
                     "last_week": games[-1]["week"],
+                    "streak_days": (last_date - first_date).days,
                 }
                 if target == "W":
                     all_time_hot = record

@@ -252,6 +252,19 @@ class DraftMedia(models.Model):
     class Meta:
         ordering = ["created_at"]
 
+    _VIDEO_EXTS = ('.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v')
+
+    @property
+    def is_video(self):
+        return (self.file.name or '').lower().endswith(self._VIDEO_EXTS)
+
+    @property
+    def safe_url(self):
+        try:
+            return self.file.url if self.file.name else None
+        except Exception:
+            return None
+
     def __str__(self):
         return f"{self.draft} — {self.file.name}"
 

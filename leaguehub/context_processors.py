@@ -1,13 +1,15 @@
 from django.core.cache import cache
 
-from .models import Season
+from .models import Season, SleeperLeague
 
-_CACHE_KEY = "league_context"
+_FFUPA_CACHE_KEY = "league_context_ffupa"
 _CACHE_TTL = 300  # 5 minutes
 
 
-def league_name(request):
-    ctx = cache.get(_CACHE_KEY)
+def league_context(request):
+    active_hub = "beaver" if request.path.startswith("/beaver/") else "ffupa"
+
+    ctx = cache.get(_FFUPA_CACHE_KEY)
     if ctx is None:
         season = Season.objects.filter(is_current=True).first()
         if not season:
@@ -18,5 +20,12 @@ def league_name(request):
         else:
             name = "F.F.U.P.A."
         ctx = {"league_name": name, "league_logo_url": season.logo_url if season else ""}
-        cache.set(_CACHE_KEY, ctx, _CACHE_TTL)
-    return ctx
+        cache.set(_FFUPA_CACHE_KEY, ctx, _CACHE_TTL)
+
+    sleeper_league = SleeperLeague.objects.filter(is_current=True).first()
+
+    return {
+        **ctx,
+        "active_hub": active_hub,
+        "sleeper_league": sleeper_league,
+    }

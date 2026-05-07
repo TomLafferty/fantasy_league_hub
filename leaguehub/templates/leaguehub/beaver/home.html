@@ -1,0 +1,113 @@
+{% extends "leaguehub/base.html" %}
+{% load beaver_tags %}
+{% block title %}BEAVER Dynasty Hub{% endblock %}
+{% block beaver_nav_home %}active{% endblock %}
+{% block content %}
+
+<!-- Hero -->
+<div class="text-center mb-4" style="padding:2rem 0 1rem;">
+  <h1 style="font-family:'Press Start 2P',monospace; font-size:1.1rem; color:var(--accent); letter-spacing:.06em; text-shadow:0 0 18px rgba(var(--accent-rgb),.6);">
+    BEAVER DYNASTY
+  </h1>
+  <div style="font-size:.75rem; color:#888; margin-top:.5rem; letter-spacing:.1em;">FANTASY FOOTBALL LEAGUE</div>
+  {% if league %}
+    <span class="badge mt-2" style="background:rgba(var(--accent-rgb),.15); border:1px solid rgba(var(--accent-rgb),.4); color:var(--accent); font-size:.7rem;">{{ league.season_year }} Season</span>
+    <span class="badge ms-2 mt-2" style="background:rgba(var(--accent-rgb),.08); border:1px solid rgba(var(--accent-rgb),.25); color:#888; font-size:.7rem;">10 Managers Strong</span>
+  {% endif %}
+</div>
+
+{% if not league %}
+<div class="alert alert-secondary text-center">No league data yet. Run <code>sync_sleeper</code> to get started.</div>
+{% else %}
+
+<!-- About Dynasty -->
+<div class="mb-4 p-3" style="border:1px solid rgba(var(--accent-rgb),.18); border-radius:4px; background:rgba(var(--accent-rgb),.04); font-size:.82rem; color:#a0a0a0; line-height:1.7;">
+  <strong style="color:var(--accent);">Dynasty. No resets. No cuts.</strong>
+  Every player you own is yours until you trade them away. IDP scoring rewards defensive mastery — linebackers, defensive linemen, defensive backs all score. FAAB bidding wars decide the waiver wire. Taxi squads develop future stars. Picks trade years into the future. This is the long game.
+</div>
+
+<!-- Leader / Last Place -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    {% if leader %}
+    <div class="card h-100" style="border-color:rgba(var(--accent-rgb),.5); box-shadow:0 0 20px rgba(var(--accent-rgb),.12);">
+      <div class="card-body p-3">
+        <div style="font-size:.6rem; color:var(--accent); font-family:'Press Start 2P',monospace; letter-spacing:.06em; margin-bottom:.5rem;">CURRENT LEADER</div>
+        <div style="font-size:1.15rem; color:#eaeaea; font-weight:600;">{{ leader.manager.display_name|default:leader.team_name|default:"Roster #"|add:leader.roster_id }}</div>
+        <div style="font-size:.78rem; color:#888; margin-top:.25rem;">
+          {{ leader.wins }}-{{ leader.losses }}{% if leader.ties %}-{{ leader.ties }}{% endif %}
+          &nbsp;&middot;&nbsp; {{ leader.points_for }} pts
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <div class="col-md-6">
+    {% if last_place %}
+    <div class="card h-100" style="border-color:rgba(200,60,60,.35);">
+      <div class="card-body p-3">
+        <div style="font-size:.6rem; color:#d06060; font-family:'Press Start 2P',monospace; letter-spacing:.06em; margin-bottom:.5rem;">LAST PLACE</div>
+        <div style="font-size:1.15rem; color:#eaeaea; font-weight:600;">{{ last_place.manager.display_name|default:last_place.team_name|default:"Roster #"|add:last_place.roster_id }}</div>
+        <div style="font-size:.78rem; color:#888; margin-top:.25rem;">
+          {{ last_place.wins }}-{{ last_place.losses }}{% if last_place.ties %}-{{ last_place.ties }}{% endif %}
+          &nbsp;&middot;&nbsp; {{ last_place.points_for }} pts
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Recent Transactions -->
+{% if recent_txns %}
+<h5 style="color:var(--accent); margin-bottom:.75rem;">Recent Activity</h5>
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Players</th>
+        <th>Team</th>
+        <th class="text-end">Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for txn in recent_txns %}
+      <tr>
+        <td>
+          {% if txn.type == "waiver" %}
+            <span class="badge" style="background:rgba(0,120,200,.2); border:1px solid rgba(0,120,200,.4); color:#6ab4ff; font-size:.7rem;">WAIVER</span>
+            {% if txn.waiver_bid is not None %}<small style="color:#888;"> ${{ txn.waiver_bid }}</small>{% endif %}
+          {% elif txn.type == "free_agent" %}
+            <span class="badge" style="background:rgba(var(--accent-rgb),.12); border:1px solid rgba(var(--accent-rgb),.3); color:var(--accent); font-size:.7rem;">FA</span>
+          {% elif txn.type == "trade" %}
+            <span class="badge" style="background:rgba(200,150,0,.15); border:1px solid rgba(200,150,0,.35); color:#d4b84a; font-size:.7rem;">TRADE</span>
+          {% endif %}
+        </td>
+        <td style="font-size:.82rem;">
+          {% for pid, rid in txn.adds.items %}
+            {% with pl=player_map|get_item:pid %}
+              <span style="color:#b8e8b8;">+ {{ pl.full_name|default:pid }}</span>{% if not forloop.last %}, {% endif %}
+            {% endwith %}
+          {% endfor %}
+          {% for pid, rid in txn.drops.items %}
+            {% with pl=player_map|get_item:pid %}
+              <span style="color:#e8a0a0;">&#8722; {{ pl.full_name|default:pid }}</span>{% if not forloop.last %}, {% endif %}
+            {% endwith %}
+          {% endfor %}
+        </td>
+        <td style="font-size:.8rem; color:#999;">
+          {% for rid in txn.roster_ids %}
+            {% with r=roster_map|get_item:rid %}{{ r.manager.display_name|default:r.team_name|default:rid }}{% endwith %}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </td>
+        <td class="text-end" style="font-size:.75rem; color:#666; white-space:nowrap;">{{ txn.created_at|date:"M j" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -34,6 +34,7 @@ class ManagerProfile(models.Model):
     )
     display_name = models.CharField(max_length=100)
     yahoo_guid = models.CharField(max_length=100, blank=True)
+    sleeper_user_id = models.CharField(max_length=100, blank=True, db_index=True)
     is_commissioner = models.BooleanField(default=False)
     is_officer = models.BooleanField(default=False)
 
@@ -387,3 +388,161 @@ class KeeperSubmission(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+# ── SLEEPER / BEAVER MODELS ───────────────────────────────────────────────────
+
+class SleeperLeague(models.Model):
+    league_id = models.CharField(max_length=64, unique=True)
+    season_year = models.PositiveIntegerField(db_index=True)
+    name = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=30, blank=True)
+    previous_league_id = models.CharField(max_length=64, blank=True)
+    total_rosters = models.PositiveIntegerField(default=10)
+    is_current = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-season_year"]
+
+    def save(self, *args, **kwargs):
+        if self.is_current:
+            SleeperLeague.objects.exclude(pk=self.pk).filter(is_current=True).update(is_current=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.season_year} BEAVER ({self.league_id})"
+
+
+class SleeperRoster(models.Model):
+    league = models.ForeignKey(SleeperLeague, on_delete=models.CASCADE, related_name="rosters")
+    roster_id = models.PositiveIntegerField()
+    owner_id = models.CharField(max_length=64, blank=True)
+    manager = models.ForeignKey(
+        ManagerProfile, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="sleeper_rosters",
+    )
+    team_name = models.CharField(max_length=150, blank=True)
+    avatar_id = models.CharField(max_length=100, blank=True)
+    wins = models.PositiveIntegerField(default=0)
+    losses = models.PositiveIntegerField(default=0)
+    ties = models.PositiveIntegerField(default=0)
+    points_for = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    points_against = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    players = models.JSONField(default=list)
+    taxi_players = models.JSONField(default=list)
+    reserve_players = models.JSONField(default=list)
+    rank = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("league", "roster_id")
+        ordering = ["rank", "roster_id"]
+
+    def __str__(self):
+        return f"{self.league.season_year} Roster {self.roster_id} ({self.team_name or self.owner_id})"
+
+
+class SleeperPlayer(models.Model):
+    sleeper_id = models.CharField(max_length=20, primary_key=True)
+    full_name = models.CharField(max_length=150, blank=True)
+    first_name = models.CharField(max_length=80, blank=True)
+    last_name = models.CharField(max_length=80, blank=True)
+    position = models.CharField(max_length=10, blank=True)
+    nfl_team = models.CharField(max_length=10, blank=True)
+    status = models.CharField(max_length=20, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["full_name"]
+
+    def __str__(self):
+        return f"{self.full_name} ({self.position}, {self.nfl_team})"
+
+
+class SleeperMatchup(models.Model):
+    league = models.ForeignKey(SleeperLeague, on_delete=models.CASCADE, related_name="matchups")
+    week = models.PositiveIntegerField()
+    matchup_id = models.PositiveIntegerField()
+    roster = models.ForeignKey(SleeperRoster, on_delete=models.CASCADE, related_name="matchups")
+    points = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_playoff = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("league", "week", "roster")
+        ordering = ["league__season_year", "week", "matchup_id"]
+
+    def __str__(self):
+        return f"{self.league.season_year} W{self.week} M{self.matchup_id}: {self.roster}"
+
+
+class SleeperTransaction(models.Model):
+    TYPE_FREE_AGENT = "free_agent"
+    TYPE_WAIVER = "waiver"
+    TYPE_TRADE = "trade"
+    TYPE_CHOICES = [
+        (TYPE_FREE_AGENT, "Free Agent"),
+        (TYPE_WAIVER, "Waiver"),
+        (TYPE_TRADE, "Trade"),
+    ]
+
+    league = models.ForeignKey(SleeperLeague, on_delete=models.CASCADE, related_name="sleeper_transactions")
+    sleeper_txn_id = models.CharField(max_length=64, unique=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    status = models.CharField(max_length=20, blank=True)
+    week = models.PositiveIntegerField(null=True, blank=True)
+    adds = models.JSONField(default=dict)
+    drops = models.JSONField(default=dict)
+    roster_ids = models.JSONField(default=list)
+    waiver_bid = models.PositiveIntegerField(null=True, blank=True)
+    draft_picks = models.JSONField(default=list)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.league.season_year} {self.type} {self.sleeper_txn_id}"
+
+
+class SleeperTradedPick(models.Model):
+    league = models.ForeignKey(SleeperLeague, on_delete=models.CASCADE, related_name="traded_picks")
+    season_year = models.PositiveIntegerField()
+    round = models.PositiveIntegerField()
+    roster_id = models.PositiveIntegerField()
+    previous_owner_id = models.PositiveIntegerField()
+    owner_id = models.PositiveIntegerField()
+
+    class Meta:
+        unique_together = ("league", "season_year", "round", "roster_id", "owner_id")
+        ordering = ["season_year", "round", "roster_id"]
+
+    def __str__(self):
+        return f"{self.season_year} R{self.round} (orig {self.roster_id} → {self.owner_id})"
+
+
+class SleeperDraftPick(models.Model):
+    league = models.ForeignKey(SleeperLeague, on_delete=models.CASCADE, related_name="draft_results")
+    draft_id = models.CharField(max_length=64, blank=True)
+    round = models.PositiveIntegerField()
+    pick_no = models.PositiveIntegerField()
+    roster_id = models.PositiveIntegerField()
+    player = models.ForeignKey(
+        SleeperPlayer, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="draft_picks",
+    )
+    player_name = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        unique_together = ("league", "draft_id", "round", "pick_no")
+        ordering = ["round", "pick_no"]
+
+    def __str__(self):
+        return f"{self.league.season_year} R{self.round}P{self.pick_no}: {self.player_name}"
+
+
+class SleeperChampion(models.Model):
+    league = models.OneToOneField(SleeperLeague, on_delete=models.CASCADE, related_name="champion")
+    roster = models.ForeignKey(SleeperRoster, on_delete=models.CASCADE, related_name="championships")
+    notes = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.league.season_year} BEAVER Champion — {self.roster.team_name}"

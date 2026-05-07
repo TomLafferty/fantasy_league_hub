@@ -1,0 +1,61 @@
+{% extends "leaguehub/base.html" %}
+{% load beaver_tags %}
+{% block title %}Draft History — BEAVER{% endblock %}
+{% block beaver_nav_drafts %}active{% endblock %}
+{% block content %}
+<h1>Draft History</h1>
+
+<!-- Season selector -->
+{% if all_leagues %}
+<form method="get" class="mb-4 d-flex align-items-center gap-2 flex-wrap">
+  <label class="form-label mb-0" for="league-select">Season:</label>
+  <select id="league-select" name="league" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+    {% for lg in all_leagues %}
+      <option value="{{ lg.id }}" {% if lg.id == league.id %}selected{% endif %}>{{ lg.season_year }} — {{ lg.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+{% endif %}
+
+{% if not league %}
+<div class="alert alert-secondary">No league data. Run <code>sync_sleeper</code> to get started.</div>
+{% elif not rounds %}
+<div class="alert alert-secondary">No draft picks recorded for this season yet.</div>
+{% else %}
+{% for round_num, picks in rounds %}
+<h5 style="color:var(--accent); margin-top:1.5rem; margin-bottom:.5rem;">Round {{ round_num }}</h5>
+<div class="table-responsive mb-3">
+  <table class="table table-sm table-hover align-middle">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Player</th>
+        <th>Pos</th>
+        <th>NFL Team</th>
+        <th>Drafted By</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for pick in picks %}
+      <tr>
+        <td style="color:var(--accent);">{{ pick.pick_no }}</td>
+        <td style="font-size:.82rem;">
+          {% if pick.player %}{{ pick.player.full_name }}{% else %}{{ pick.player_name|default:"Unknown" }}{% endif %}
+        </td>
+        <td style="font-size:.78rem; color:#888;">
+          {% if pick.player %}{{ pick.player.position }}{% endif %}
+        </td>
+        <td style="font-size:.78rem; color:#888;">
+          {% if pick.player %}{{ pick.player.nfl_team }}{% endif %}
+        </td>
+        <td style="font-size:.82rem;">
+          {% with r=roster_map|get_item:pick.roster_id %}{{ r.manager.display_name|default:r.team_name|default:pick.roster_id }}{% endwith %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

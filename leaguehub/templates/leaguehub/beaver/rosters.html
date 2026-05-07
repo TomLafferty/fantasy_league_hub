@@ -1,0 +1,84 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Rosters — BEAVER{% endblock %}
+{% block beaver_nav_rosters %}active{% endblock %}
+{% block content %}
+<h1>Rosters</h1>
+
+{% if not league %}
+<div class="alert alert-secondary">No league data. Run <code>sync_sleeper</code> to get started.</div>
+{% elif not roster_data %}
+<div class="alert alert-secondary">No rosters found for this season.</div>
+{% else %}
+<div class="row g-3">
+  {% for rd in roster_data %}
+  {% with r=rd.roster %}
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div style="font-size:.6rem; color:var(--accent); font-family:'Press Start 2P',monospace; letter-spacing:.05em;">{{ r.manager.display_name|default:r.team_name|default:"Roster #"|add:r.roster_id }}</div>
+            {% if r.team_name %}<div style="font-size:.78rem; color:#888; margin-top:3px;">{{ r.team_name }}</div>{% endif %}
+          </div>
+          <div style="font-size:.75rem; color:#666; text-align:right;">
+            <div>{{ r.wins }}-{{ r.losses }}{% if r.ties %}-{{ r.ties }}{% endif %}</div>
+            <div>{{ r.points_for }} pts</div>
+          </div>
+        </div>
+
+        <!-- Main roster -->
+        <div class="mb-2">
+          {% for item in rd.main %}
+          <div class="d-flex align-items-center py-1" style="border-bottom:1px solid rgba(var(--accent-rgb),.07); font-size:.78rem;">
+            {% if item.player %}
+              <span style="width:36px; color:var(--accent); font-size:.68rem; flex-shrink:0;">{{ item.player.position }}</span>
+              <span style="color:#d0d0d0;">{{ item.player.full_name }}</span>
+              {% if item.player.nfl_team %}<span style="color:#666; margin-left:auto; font-size:.7rem;">{{ item.player.nfl_team }}</span>{% endif %}
+            {% else %}
+              <span style="width:36px; color:#555; font-size:.68rem; flex-shrink:0;">?</span>
+              <span style="color:#555;">Unknown (#{{ item.pid }})</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Taxi squad -->
+        {% if rd.taxi %}
+        <div class="mt-2 mb-1" style="font-size:.62rem; color:#c08000; font-family:'Press Start 2P',monospace; letter-spacing:.05em;">TAXI</div>
+        {% for item in rd.taxi %}
+        <div class="d-flex align-items-center py-1" style="border-bottom:1px solid rgba(200,130,0,.1); font-size:.76rem; background:rgba(200,130,0,.05); border-radius:2px; padding-left:4px;">
+          {% if item.player %}
+            <span style="width:36px; color:#c08000; font-size:.68rem; flex-shrink:0;">{{ item.player.position }}</span>
+            <span style="color:#c8b060;">{{ item.player.full_name }}</span>
+          {% else %}
+            <span style="width:36px; color:#555; font-size:.68rem; flex-shrink:0;">?</span>
+            <span style="color:#555;">Unknown (#{{ item.pid }})</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <!-- IR / Reserve -->
+        {% if rd.reserve %}
+        <div class="mt-2 mb-1" style="font-size:.62rem; color:#888; font-family:'Press Start 2P',monospace; letter-spacing:.05em;">IR / RESERVE</div>
+        {% for item in rd.reserve %}
+        <div class="d-flex align-items-center py-1" style="border-bottom:1px solid rgba(128,128,128,.1); font-size:.76rem;">
+          {% if item.player %}
+            <span style="width:36px; color:#666; font-size:.68rem; flex-shrink:0;">{{ item.player.position }}</span>
+            <span style="color:#888;">{{ item.player.full_name }}</span>
+          {% else %}
+            <span style="width:36px; color:#555; font-size:.68rem; flex-shrink:0;">?</span>
+            <span style="color:#555;">Unknown (#{{ item.pid }})</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+  {% endwith %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Standings — BEAVER{% endblock %}
+{% block beaver_nav_standings %}active{% endblock %}
+{% block content %}
+<h1>Standings</h1>
+
+<!-- Season selector -->
+{% if all_leagues %}
+<form method="get" class="mb-4 d-flex align-items-center gap-2 flex-wrap">
+  <label class="form-label mb-0" for="league-select">Season:</label>
+  <select id="league-select" name="league" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+    {% for lg in all_leagues %}
+      <option value="{{ lg.id }}" {% if lg.id == league.id %}selected{% endif %}>{{ lg.season_year }} — {{ lg.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+{% endif %}
+
+{% if league %}
+  {% if rosters %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Team</th>
+          <th>Manager</th>
+          <th class="text-center">W</th>
+          <th class="text-center">L</th>
+          <th class="text-center">T</th>
+          <th class="text-end">PF</th>
+          <th class="text-end">PA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rosters %}
+        <tr>
+          <td style="color:var(--accent); font-weight:600;">{{ r.rank|default:"—" }}</td>
+          <td>{{ r.team_name|default:"—" }}</td>
+          <td>{{ r.manager.display_name|default:"—" }}</td>
+          <td class="text-center">{{ r.wins }}</td>
+          <td class="text-center">{{ r.losses }}</td>
+          <td class="text-center">{{ r.ties }}</td>
+          <td class="text-end">{{ r.points_for }}</td>
+          <td class="text-end">{{ r.points_against }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-secondary">No roster data for this season yet.</div>
+  {% endif %}
+{% else %}
+<div class="alert alert-secondary">No league data. Run <code>sync_sleeper</code> to get started.</div>
+{% endif %}
+{% endblock %}

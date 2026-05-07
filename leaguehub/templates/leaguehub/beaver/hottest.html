@@ -1,0 +1,89 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Hottest &amp; Coldest — BEAVER{% endblock %}
+{% block beaver_nav_hottest %}active{% endblock %}
+{% block content %}
+<h1>Hottest &amp; Coldest</h1>
+
+{% if not league %}
+<div class="alert alert-secondary">No league data. Run <code>sync_sleeper</code> to get started.</div>
+{% elif not hottest and not coldest %}
+<div class="alert alert-secondary">No matchup data yet for this season.</div>
+{% else %}
+
+<!-- Active streaks -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card h-100" style="border-color:rgba(var(--accent-rgb),.5); box-shadow:0 0 18px rgba(var(--accent-rgb),.12);">
+      <div class="card-body p-3">
+        <div style="font-size:.6rem; color:var(--accent); font-family:'Press Start 2P',monospace; letter-spacing:.06em; margin-bottom:.6rem;">HOTTEST STREAK</div>
+        {% if hottest %}
+          <div style="font-size:1.1rem; color:#eaeaea; font-weight:600;">{{ hottest.manager }}</div>
+          <div style="font-size:2rem; color:var(--accent); font-weight:700; line-height:1.1; margin:.3rem 0;">{{ hottest.streak_count }}W</div>
+          <div style="font-size:.78rem; color:#888;">{{ hottest.streak_days }} days &middot; avg margin {{ hottest.avg_margin }} pts</div>
+        {% else %}
+          <div style="color:#666; font-size:.85rem;">No active win streak.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100" style="border-color:rgba(200,60,60,.4); box-shadow:0 0 18px rgba(200,60,60,.08);">
+      <div class="card-body p-3">
+        <div style="font-size:.6rem; color:#d06060; font-family:'Press Start 2P',monospace; letter-spacing:.06em; margin-bottom:.6rem;">COLDEST STREAK</div>
+        {% if coldest %}
+          <div style="font-size:1.1rem; color:#eaeaea; font-weight:600;">{{ coldest.manager }}</div>
+          <div style="font-size:2rem; color:#d06060; font-weight:700; line-height:1.1; margin:.3rem 0;">{{ coldest.streak_count }}L</div>
+          <div style="font-size:.78rem; color:#888;">{{ coldest.streak_days }} days &middot; avg margin {{ coldest.avg_margin }} pts</div>
+        {% else %}
+          <div style="color:#666; font-size:.85rem;">No active loss streak.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- All-time records -->
+{% if all_time_hot or all_time_cold %}
+<h5 style="color:var(--accent); margin-bottom:.75rem; margin-top:1.5rem;">All-Time Records</h5>
+<div class="row g-3">
+  {% if all_time_hot %}
+  <div class="col-md-6">
+    <div class="card" style="border-color:rgba(var(--accent-rgb),.3);">
+      <div class="card-body p-3">
+        <div style="font-size:.6rem; color:var(--accent); font-family:'Press Start 2P',monospace; letter-spacing:.05em; margin-bottom:.5rem;">LONGEST WIN STREAK EVER</div>
+        <div style="font-size:.95rem; color:#eaeaea; font-weight:600;">{{ all_time_hot.manager }}</div>
+        <div style="font-size:1.6rem; color:var(--accent); font-weight:700;">{{ all_time_hot.streak_count }}W</div>
+        <div style="font-size:.76rem; color:#888;">
+          Wk {{ all_time_hot.first_week }} – Wk {{ all_time_hot.last_week }},
+          {{ all_time_hot.first_year }}{% if all_time_hot.first_year != all_time_hot.last_year %}–{{ all_time_hot.last_year }}{% endif %}
+          &middot; {{ all_time_hot.streak_days }} calendar days
+          &middot; avg margin {{ all_time_hot.avg_margin }} pts
+          {% if all_time_hot.is_active %}<span style="color:var(--accent);"> (active)</span>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if all_time_cold %}
+  <div class="col-md-6">
+    <div class="card" style="border-color:rgba(200,60,60,.3);">
+      <div class="card-body p-3">
+        <div style="font-size:.6rem; color:#d06060; font-family:'Press Start 2P',monospace; letter-spacing:.05em; margin-bottom:.5rem;">LONGEST LOSS STREAK EVER</div>
+        <div style="font-size:.95rem; color:#eaeaea; font-weight:600;">{{ all_time_cold.manager }}</div>
+        <div style="font-size:1.6rem; color:#d06060; font-weight:700;">{{ all_time_cold.streak_count }}L</div>
+        <div style="font-size:.76rem; color:#888;">
+          Wk {{ all_time_cold.first_week }} – Wk {{ all_time_cold.last_week }},
+          {{ all_time_cold.first_year }}{% if all_time_cold.first_year != all_time_cold.last_year %}–{{ all_time_cold.last_year }}{% endif %}
+          &middot; {{ all_time_cold.streak_days }} calendar days
+          &middot; avg margin {{ all_time_cold.avg_margin }} pts
+          {% if all_time_cold.is_active %}<span style="color:#d06060;"> (active)</span>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

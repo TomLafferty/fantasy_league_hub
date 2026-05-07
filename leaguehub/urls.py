@@ -23,6 +23,7 @@ from .views import (
     keeper_history_view,
     submit_keepers_view,
     team_detail_view,
+    transactions_view,
 )
 
 urlpatterns = [
@@ -49,4 +50,5 @@ urlpatterns = [
     path("keepers/review/", commissioner_keepers_view, name="commissioner_keepers"),
     path("keepers/submit/", submit_keepers_view, name="submit_keepers"),
     path("team/<int:team_id>/", team_detail_view, name="team_detail"),
+    path("transactions/", transactions_view, name="transactions"),
 ]

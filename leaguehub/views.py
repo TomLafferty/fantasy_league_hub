@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import DraftCommentForm, DraftForm, DraftMediaForm, KeeperDeadlineForm, KeeperSubmissionForm
-from .models import Champion, Draft, DraftComment, DraftMedia, DraftPick, KeeperRecord, KeeperSubmission, Matchup, PlayerWeeklyScore, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
+from .models import Champion, Draft, DraftComment, DraftMedia, DraftPick, KeeperRecord, KeeperSubmission, Matchup, MediaComment, MediaReaction, PlayerWeeklyScore, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
 
 
 def is_league_official(user):
@@ -849,6 +849,20 @@ def drafts_view(request):
     is_upcoming = selected_season.is_current and (draft.date is None or draft.date >= today)
     official = is_league_official(request.user)
 
+    # Prefetch reactions and comments for all media in one query pass
+    media_list = list(
+        draft.media.prefetch_related("reactions", "media_comments__author").all()
+    )
+    user_reaction_map = {}
+    if request.user.is_authenticated:
+        for r in MediaReaction.objects.filter(media__in=media_list, user=request.user):
+            user_reaction_map[r.media_id] = r.reaction
+    for item in media_list:
+        item.love_count = sum(1 for r in item.reactions.all() if r.reaction == MediaReaction.LOVE)
+        item.like_count = sum(1 for r in item.reactions.all() if r.reaction == MediaReaction.LIKE)
+        item.hate_count = sum(1 for r in item.reactions.all() if r.reaction == MediaReaction.HATE)
+        item.user_reaction = user_reaction_map.get(item.id)
+
     comment_form = DraftCommentForm() if request.user.is_authenticated else None
     media_form = DraftMediaForm() if request.user.is_authenticated else None
     draft_form = DraftForm(instance=draft) if official else None
@@ -857,12 +871,73 @@ def drafts_view(request):
         "seasons": seasons,
         "selected_season": selected_season,
         "draft": draft,
+        "media_list": media_list,
         "is_upcoming": is_upcoming,
         "is_official": official,
         "comment_form": comment_form,
         "media_form": media_form,
         "draft_form": draft_form,
     })
+
+
+# ── MEDIA ACTIONS ─────────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def draft_delete_media_view(request, media_id):
+    media = get_object_or_404(DraftMedia, id=media_id)
+    if media.uploaded_by != request.user and not request.user.is_superuser:
+        messages.error(request, "You can only delete your own uploads.")
+        return redirect(f"/drafts/?season={media.draft.season_id}")
+    season_id = media.draft.season_id
+    try:
+        media.file.delete(save=False)
+    except Exception:
+        pass
+    media.delete()
+    messages.success(request, "Media deleted.")
+    return redirect(f"/drafts/?season={season_id}")
+
+
+@login_required
+@require_POST
+def draft_react_media_view(request, media_id):
+    media = get_object_or_404(DraftMedia, id=media_id)
+    reaction_type = request.POST.get("reaction")
+    if reaction_type not in (MediaReaction.LOVE, MediaReaction.LIKE, MediaReaction.HATE):
+        return redirect(f"/drafts/?season={media.draft.season_id}")
+    existing = MediaReaction.objects.filter(media=media, user=request.user).first()
+    if existing:
+        if existing.reaction == reaction_type:
+            existing.delete()          # same reaction → toggle off
+        else:
+            existing.reaction = reaction_type
+            existing.save()
+    else:
+        MediaReaction.objects.create(media=media, user=request.user, reaction=reaction_type)
+    return redirect(f"/drafts/?season={media.draft.season_id}")
+
+
+@login_required
+@require_POST
+def draft_comment_media_view(request, media_id):
+    media = get_object_or_404(DraftMedia, id=media_id)
+    text = request.POST.get("text", "").strip()
+    if text:
+        MediaComment.objects.create(media=media, author=request.user, text=text)
+    return redirect(f"/drafts/?season={media.draft.season_id}")
+
+
+@login_required
+@require_POST
+def draft_delete_media_comment_view(request, comment_id):
+    comment = get_object_or_404(MediaComment, id=comment_id)
+    if comment.author != request.user and not request.user.is_superuser:
+        messages.error(request, "You can only delete your own comments.")
+        return redirect(f"/drafts/?season={comment.media.draft.season_id}")
+    season_id = comment.media.draft.season_id
+    comment.delete()
+    return redirect(f"/drafts/?season={season_id}")
 
 
 @login_required

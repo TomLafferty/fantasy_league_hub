@@ -110,37 +110,134 @@
 {% endif %}
 
 {# ── Media gallery ── #}
-{% if draft.media.all %}
+{% if media_list %}
 <div class="mb-4">
   <h5>Photos &amp; Media</h5>
   <div class="row g-3">
-    {% for item in draft.media.all %}
+    {% for item in media_list %}
     <div class="{% if item.is_video %}col-12 col-md-6{% else %}col-6 col-md-3{% endif %}">
-      <div>
+      <div style="background:rgba(0,0,0,.2); border-radius:6px; overflow:hidden; border:1px solid rgba(var(--accent-rgb),.15);">
+
+        {# ── Media file ── #}
         {% if item.safe_url %}
           {% if item.is_video %}
-            <video controls playsinline class="img-fluid rounded w-100"
-                   style="max-height:320px; border:1px solid rgba(var(--accent-rgb),.2); background:#000;">
+            <video controls playsinline class="w-100"
+                   style="max-height:320px; background:#000; display:block;">
               <source src="{{ item.safe_url }}">
               <a href="{{ item.safe_url }}" target="_blank" rel="noopener">Download video</a>
             </video>
           {% else %}
             <a href="{{ item.safe_url }}" target="_blank" rel="noopener">
               <img src="{{ item.safe_url }}" alt="{{ item.caption|default:'' }}"
-                   class="img-fluid rounded"
-                   style="object-fit:cover; height:180px; width:100%; border:1px solid rgba(var(--accent-rgb),.2); display:block;">
+                   class="img-fluid w-100"
+                   style="object-fit:cover; height:180px; display:block;">
             </a>
           {% endif %}
         {% else %}
-          <div style="height:180px; display:flex; align-items:center; justify-content:center;
-                      border:1px solid rgba(var(--accent-rgb),.2); border-radius:4px; color:#666; font-size:0.8rem;">
+          <div style="height:180px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem;">
             File unavailable
           </div>
         {% endif %}
-        {% if item.caption %}
-        <div style="font-size:0.75rem; color:#aaa; margin-top:0.25rem;">{{ item.caption }}</div>
-        {% endif %}
-        <div style="font-size:0.7rem; color:#666;">{{ item.uploaded_by.username }} · {{ item.created_at|date:"M j" }}</div>
+
+        {# ── Caption + meta ── #}
+        <div style="padding:0.4rem 0.6rem;">
+          {% if item.caption %}
+          <div style="font-size:0.78rem; color:#bbb; margin-bottom:0.15rem;">{{ item.caption }}</div>
+          {% endif %}
+          <div style="font-size:0.7rem; color:#666;">{{ item.uploaded_by.username }} · {{ item.created_at|date:"M j" }}</div>
+        </div>
+
+        {# ── Reactions + delete bar ── #}
+        <div style="padding:0.3rem 0.5rem; display:flex; align-items:center; gap:0.35rem; border-top:1px solid rgba(var(--accent-rgb),.1);">
+          {% if user.is_authenticated %}
+            <form method="post" action="{% url 'draft_react_media' item.id %}" style="display:contents;">
+              {% csrf_token %}
+              <input type="hidden" name="reaction" value="love">
+              <button type="submit" class="btn btn-sm px-2 py-0"
+                      style="font-size:0.85rem; background:{% if item.user_reaction == 'love' %}rgba(200,50,50,.35){% else %}transparent{% endif %}; border:1px solid {% if item.user_reaction == 'love' %}rgba(220,80,80,.5){% else %}rgba(255,255,255,.1){% endif %}; color:#eee; line-height:1.6;">
+                ❤️ {{ item.love_count }}
+              </button>
+            </form>
+            <form method="post" action="{% url 'draft_react_media' item.id %}" style="display:contents;">
+              {% csrf_token %}
+              <input type="hidden" name="reaction" value="like">
+              <button type="submit" class="btn btn-sm px-2 py-0"
+                      style="font-size:0.85rem; background:{% if item.user_reaction == 'like' %}rgba(50,120,200,.35){% else %}transparent{% endif %}; border:1px solid {% if item.user_reaction == 'like' %}rgba(80,150,220,.5){% else %}rgba(255,255,255,.1){% endif %}; color:#eee; line-height:1.6;">
+                👍 {{ item.like_count }}
+              </button>
+            </form>
+            <form method="post" action="{% url 'draft_react_media' item.id %}" style="display:contents;">
+              {% csrf_token %}
+              <input type="hidden" name="reaction" value="hate">
+              <button type="submit" class="btn btn-sm px-2 py-0"
+                      style="font-size:0.85rem; background:{% if item.user_reaction == 'hate' %}rgba(160,80,0,.35){% else %}transparent{% endif %}; border:1px solid {% if item.user_reaction == 'hate' %}rgba(200,110,0,.5){% else %}rgba(255,255,255,.1){% endif %}; color:#eee; line-height:1.6;">
+                👎 {{ item.hate_count }}
+              </button>
+            </form>
+          {% else %}
+            <span style="font-size:0.82rem; color:#888;">❤️ {{ item.love_count }} &nbsp; 👍 {{ item.like_count }} &nbsp; 👎 {{ item.hate_count }}</span>
+          {% endif %}
+
+          <div style="flex:1;"></div>
+
+          {# Comments toggle #}
+          <button class="btn btn-sm px-2 py-0"
+                  style="font-size:0.78rem; background:transparent; border:1px solid rgba(255,255,255,.1); color:#aaa; line-height:1.6;"
+                  data-bs-toggle="collapse" data-bs-target="#media-comments-{{ item.id }}">
+            💬 {{ item.media_comments.count }}
+          </button>
+
+          {% if user.is_authenticated and item.safe_url %}
+            {% if item.uploaded_by == user or user.is_superuser %}
+            <form method="post" action="{% url 'draft_delete_media' item.id %}"
+                  onsubmit="return confirm('Delete this upload?');" style="display:contents;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm px-2 py-0"
+                      style="font-size:0.78rem; background:transparent; border:1px solid rgba(200,50,50,.3); color:#cc6666; line-height:1.6;">
+                🗑
+              </button>
+            </form>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        {# ── Per-media comments ── #}
+        <div class="collapse" id="media-comments-{{ item.id }}"
+             style="border-top:1px solid rgba(var(--accent-rgb),.1);">
+          <div style="padding:0.5rem 0.6rem;">
+            {% for mc in item.media_comments.all %}
+            <div class="d-flex align-items-start gap-1 mb-1">
+              <div style="flex:1; font-size:0.78rem;">
+                <span style="color:#888;">{{ mc.author.username }}:</span>
+                <span style="color:#ccc;">{{ mc.text }}</span>
+              </div>
+              {% if user.is_authenticated %}
+                {% if mc.author == user or user.is_superuser %}
+                <form method="post" action="{% url 'draft_delete_media_comment' mc.id %}" style="flex-shrink:0;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm p-0"
+                          style="font-size:0.7rem; background:transparent; border:none; color:#666; line-height:1;"
+                          title="Delete comment">✕</button>
+                </form>
+                {% endif %}
+              {% endif %}
+            </div>
+            {% empty %}
+            <p style="font-size:0.75rem; color:#555; margin:0;">No comments yet.</p>
+            {% endfor %}
+
+            {% if user.is_authenticated %}
+            <form method="post" action="{% url 'draft_comment_media' item.id %}" class="mt-2 d-flex gap-1">
+              {% csrf_token %}
+              <input type="text" name="text" placeholder="Add a comment…" maxlength="300"
+                     class="form-control form-control-sm"
+                     style="background:rgba(255,255,255,.05); border-color:rgba(var(--accent-rgb),.25); color:#ddd; font-size:0.78rem;">
+              <button type="submit" class="btn btn-primary btn-sm" style="white-space:nowrap; font-size:0.78rem;">Post</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+
       </div>
     </div>
     {% endfor %}

@@ -4,7 +4,9 @@ from collections import defaultdict
 import requests as http_requests
 
 from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import PasswordChangeForm
 from django.db.models import Count, Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -902,6 +904,25 @@ def draft_add_media_view(request, draft_id):
         media.uploaded_by = request.user
         media.save()
     return redirect(f"/drafts/?season={draft.season_id}")
+
+
+# ── SETTINGS ─────────────────────────────────────────────────────────────────
+
+@login_required
+def settings_view(request):
+    from django.contrib.auth.forms import PasswordChangeForm
+    from django.contrib.auth import update_session_auth_hash
+
+    if request.method == "POST":
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            update_session_auth_hash(request, form.save())
+            messages.success(request, "Password updated.")
+            return redirect("settings")
+    else:
+        form = PasswordChangeForm(request.user)
+
+    return render(request, "leaguehub/settings.html", {"password_form": form})
 
 
 # ── COMMISSIONER KEEPER REVIEW ───────────────────────────────────────────────

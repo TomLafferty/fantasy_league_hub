@@ -1,0 +1,184 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Settings — {{ league_name }} Hub{% endblock %}
+{% block nav_settings %}active{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+<!-- ── THEME ──────────────────────────────────────────────────────── -->
+<h5 style="color:var(--accent); margin-bottom:1rem; margin-top:1.5rem;">Theme</h5>
+
+<div class="row g-3 mb-3">
+
+  <!-- Arcade Field (default) -->
+  <div class="col-sm-4">
+    <div class="theme-card" data-theme-id=""
+         onclick="setTheme('')"
+         style="cursor:pointer; padding:1rem 1.1rem; border-radius:4px;
+                border:2px solid rgba(0,221,68,.35); background:#030d05;
+                transition:border-color .2s, opacity .2s;">
+      <div style="height:3px; border-radius:2px; background:#00dd44; margin-bottom:10px;"></div>
+      <div style="font-size:.6rem; color:#00dd44; font-family:'Press Start 2P',monospace; letter-spacing:.05em; margin-bottom:6px;">ARCADE FIELD</div>
+      <div style="font-size:.75rem; color:#88d888;">Retro scoreboard. The classic.</div>
+      <div class="theme-badge" data-for="" style="display:none; margin-top:8px; font-size:.7rem; color:#00dd44; font-weight:600;">✓ Active</div>
+    </div>
+  </div>
+
+  <!-- Night Game -->
+  <div class="col-sm-4">
+    <div class="theme-card" data-theme-id="night"
+         onclick="setTheme('night')"
+         style="cursor:pointer; padding:1rem 1.1rem; border-radius:4px;
+                border:2px solid rgba(240,180,41,.35); background:#05050f;
+                transition:border-color .2s, opacity .2s;">
+      <div style="height:3px; border-radius:2px; background:#f0b429; margin-bottom:10px;"></div>
+      <div style="font-size:.6rem; color:#f0b429; font-family:'Press Start 2P',monospace; letter-spacing:.05em; margin-bottom:6px;">NIGHT GAME</div>
+      <div style="font-size:.75rem; color:#c8a060;">Sunday night under the lights.</div>
+      <div class="theme-badge" data-for="night" style="display:none; margin-top:8px; font-size:.7rem; color:#f0b429; font-weight:600;">✓ Active</div>
+    </div>
+  </div>
+
+  <!-- Vintage Pigskin -->
+  <div class="col-sm-4">
+    <div class="theme-card" data-theme-id="vintage"
+         onclick="setTheme('vintage')"
+         style="cursor:pointer; padding:1rem 1.1rem; border-radius:4px;
+                border:2px solid rgba(212,98,26,.35); background:#120900;
+                transition:border-color .2s, opacity .2s;">
+      <div style="height:3px; border-radius:2px; background:#d4621a; margin-bottom:10px;"></div>
+      <div style="font-size:.6rem; color:#d4621a; font-family:'Press Start 2P',monospace; letter-spacing:.05em; margin-bottom:6px;">VINTAGE PIGSKIN</div>
+      <div style="font-size:.75rem; color:#b08060;">Old school. Leather helmet era.</div>
+      <div class="theme-badge" data-for="vintage" style="display:none; margin-top:8px; font-size:.7rem; color:#d4621a; font-weight:600;">✓ Active</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Accent color picker -->
+<div class="mb-4">
+  <label class="form-label mb-2">Accent Color</label>
+  <div class="d-flex align-items-center gap-3 flex-wrap">
+    <input type="color" id="accent-picker"
+           style="width:48px; height:36px; padding:2px; border-radius:4px;
+                  border:1px solid rgba(255,255,255,.2); background:transparent; cursor:pointer;">
+    <button class="btn btn-sm btn-outline-secondary" onclick="resetAccent()">Reset Color</button>
+    <button class="btn btn-sm btn-outline-danger" onclick="resetAll()">Reset to Default</button>
+  </div>
+  <div class="form-text mt-1">Customize the accent color for the active theme. "Reset Color" restores the theme default. "Reset to Default" restores everything.</div>
+</div>
+
+<hr style="border-color:rgba(var(--accent-rgb),.2); margin:2rem 0;">
+
+<!-- ── PASSWORD CHANGE ────────────────────────────────────────────── -->
+<h5 style="color:var(--accent); margin-bottom:1rem;">Change Password</h5>
+<div class="row">
+  <div class="col-md-5">
+    <div class="card" style="border-color:rgba(var(--accent-rgb),.3);">
+      <div class="card-body p-4">
+        <form method="post">
+          {% csrf_token %}
+
+          {% if password_form.errors %}
+            <div class="alert alert-danger">
+              {% for field in password_form %}
+                {% for error in field.errors %}<div>{{ error }}</div>{% endfor %}
+              {% endfor %}
+              {% for error in password_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="{{ password_form.old_password.id_for_label }}" class="form-label">Current password</label>
+            <input type="password" name="{{ password_form.old_password.html_name }}"
+                   id="{{ password_form.old_password.id_for_label }}"
+                   class="form-control" autocomplete="current-password" required>
+          </div>
+          <div class="mb-3">
+            <label for="{{ password_form.new_password1.id_for_label }}" class="form-label">New password</label>
+            <input type="password" name="{{ password_form.new_password1.html_name }}"
+                   id="{{ password_form.new_password1.id_for_label }}"
+                   class="form-control" autocomplete="new-password" required>
+            <div class="form-text">At least 8 characters, not entirely numeric.</div>
+          </div>
+          <div class="mb-4">
+            <label for="{{ password_form.new_password2.id_for_label }}" class="form-label">Confirm new password</label>
+            <input type="password" name="{{ password_form.new_password2.html_name }}"
+                   id="{{ password_form.new_password2.id_for_label }}"
+                   class="form-control" autocomplete="new-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Update Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const THEME_DEFAULTS = {
+  '':        { accent: '#00dd44', rgb: '0,221,68'   },
+  'night':   { accent: '#f0b429', rgb: '240,180,41' },
+  'vintage': { accent: '#d4621a', rgb: '212,98,26'  },
+};
+
+function hexToRgb(hex) {
+  return parseInt(hex.slice(1,3),16)+','+parseInt(hex.slice(3,5),16)+','+parseInt(hex.slice(5,7),16);
+}
+
+function setTheme(id) {
+  var root = document.documentElement;
+  if (id) root.setAttribute('data-theme', id);
+  else     root.removeAttribute('data-theme');
+  root.style.removeProperty('--accent');
+  root.style.removeProperty('--accent-rgb');
+  localStorage.setItem('ffhub-theme', id);
+  localStorage.removeItem('ffhub-accent');
+  document.getElementById('accent-picker').value = THEME_DEFAULTS[id].accent;
+  syncUI(id);
+}
+
+function resetAccent() {
+  var id = document.documentElement.getAttribute('data-theme') || '';
+  document.documentElement.style.removeProperty('--accent');
+  document.documentElement.style.removeProperty('--accent-rgb');
+  localStorage.removeItem('ffhub-accent');
+  document.getElementById('accent-picker').value = THEME_DEFAULTS[id].accent;
+}
+
+function resetAll() {
+  var root = document.documentElement;
+  root.removeAttribute('data-theme');
+  root.style.removeProperty('--accent');
+  root.style.removeProperty('--accent-rgb');
+  localStorage.removeItem('ffhub-theme');
+  localStorage.removeItem('ffhub-accent');
+  document.getElementById('accent-picker').value = THEME_DEFAULTS[''].accent;
+  syncUI('');
+}
+
+function syncUI(activeId) {
+  document.querySelectorAll('.theme-card').forEach(function(card) {
+    var isActive = card.dataset.themeId === activeId;
+    card.style.opacity = isActive ? '1' : '0.55';
+    card.style.transform = isActive ? 'scale(1.03)' : 'scale(1)';
+  });
+  document.querySelectorAll('.theme-badge').forEach(function(badge) {
+    badge.style.display = badge.dataset.for === activeId ? '' : 'none';
+  });
+}
+
+(function init() {
+  var savedTheme  = localStorage.getItem('ffhub-theme') || '';
+  var savedAccent = localStorage.getItem('ffhub-accent');
+  var picker = document.getElementById('accent-picker');
+
+  syncUI(savedTheme);
+  picker.value = savedAccent || THEME_DEFAULTS[savedTheme].accent;
+
+  picker.addEventListener('input', function() {
+    var hex = this.value;
+    document.documentElement.style.setProperty('--accent', hex);
+    document.documentElement.style.setProperty('--accent-rgb', hexToRgb(hex));
+    localStorage.setItem('ffhub-accent', hex);
+  });
+})();
+</script>
+{% endblock %}

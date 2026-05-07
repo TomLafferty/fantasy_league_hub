@@ -1,0 +1,72 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Hottest and Coldest — {{ league_name }} Hub{% endblock %}
+{% block nav_hottest %}active{% endblock %}
+{% block content %}
+<h1>Hottest and Coldest</h1>
+
+<div class="row">
+  <!-- HOTTEST -->
+  <div class="col-md-6 mb-4">
+    <div class="card bg-dark border-success" style="border-color: rgba(0,210,55,.45) !important;">
+      <div class="card-header bg-dark" style="border-bottom: 2px solid rgba(0,210,55,.45) !important; color: #00dd44;">
+        🔥 HOTTEST (Longest Winning Streak)
+      </div>
+      <div class="card-body">
+        {% if hottest %}
+          <div class="mb-3">
+            <h3 style="color: #eaeaea; text-shadow: 0 0 10px rgba(0,220,60,.4);">{{ hottest.manager }}</h3>
+            <div class="fs-5" style="color: #d0d0d0;">
+              <p class="mb-2">
+                <strong style="color: #00ff50;">{{ hottest.streak_count }}-game winning streak</strong>
+              </p>
+              <p class="mb-2">
+                Last game: <strong>{{ hottest.latest_year }} Week {{ hottest.latest_week }}</strong>
+              </p>
+              <p class="mb-2">
+                Latest score: <strong style="color: #44ff88;">{{ hottest.latest_score }}</strong> vs {{ hottest.opponent_score }}
+              </p>
+              <p style="font-size: 0.9rem; color: #88d888; font-style: italic;">
+                Days since last loss: counting from {{ hottest.latest_year }} W{{ hottest.latest_week }}...
+              </p>
+            </div>
+          </div>
+        {% else %}
+          <p style="color: #c8c8c8;">No matchup data available yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- COLDEST -->
+  <div class="col-md-6 mb-4">
+    <div class="card bg-dark border-danger" style="border-color: rgba(200,0,0,.45) !important;">
+      <div class="card-header bg-dark" style="border-bottom: 2px solid rgba(200,0,0,.45) !important; color: #d86060;">
+        ❄️ COLDEST (Longest Losing Streak)
+      </div>
+      <div class="card-body">
+        {% if coldest %}
+          <div class="mb-3">
+            <h3 style="color: #eaeaea; text-shadow: 0 0 10px rgba(0,220,60,.4);">{{ coldest.manager }}</h3>
+            <div class="fs-5" style="color: #d0d0d0;">
+              <p class="mb-2">
+                <strong style="color: #ff6666;">{{ coldest.streak_count }}-game losing streak</strong>
+              </p>
+              <p class="mb-2">
+                Last game: <strong>{{ coldest.latest_year }} Week {{ coldest.latest_week }}</strong>
+              </p>
+              <p class="mb-2">
+                Latest score: <strong style="color: #ff8888;">{{ coldest.latest_score }}</strong> vs {{ coldest.opponent_score }}
+              </p>
+              <p style="font-size: 0.9rem; color: #d88888; font-style: italic;">
+                Days since last win: counting from {{ coldest.latest_year }} W{{ coldest.latest_week }}...
+              </p>
+            </div>
+          </div>
+        {% else %}
+          <p style="color: #c8c8c8;">No matchup data available yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

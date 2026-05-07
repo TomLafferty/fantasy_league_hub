@@ -137,6 +137,113 @@ def vote_rule_view(request, proposal_id):
     })
 
 
+def hottest_coldest_view(request):
+    """Show the hottest (longest winning streak) and coldest (longest losing streak) managers."""
+    from datetime import datetime
+    
+    def mgr_name(team):
+        return team.manager.display_name if team and team.manager else (team.name if team else "Unknown")
+
+    # Get all matchups ordered by season year and week
+    all_matchups = list(
+        Matchup.objects.select_related("team_a__manager", "team_b__manager", "season")
+        .order_by("season__year", "week")
+    )
+    
+    if not all_matchups:
+        return render(request, "leaguehub/hottest_coldest.html", {
+            "hottest": None,
+            "coldest": None,
+        })
+
+    # Build a timeline of results for each manager
+    manager_results = defaultdict(list)  # manager_name -> [(year, week, result)]
+    
+    for m in all_matchups:
+        if m.score_a > m.score_b:
+            manager_results[mgr_name(m.team_a)].append({
+                "year": m.season.year,
+                "week": m.week,
+                "result": "W",
+                "score": m.score_a,
+                "opponent_score": m.score_b,
+            })
+            manager_results[mgr_name(m.team_b)].append({
+                "year": m.season.year,
+                "week": m.week,
+                "result": "L",
+                "score": m.score_b,
+                "opponent_score": m.score_a,
+            })
+        elif m.score_b > m.score_a:
+            manager_results[mgr_name(m.team_a)].append({
+                "year": m.season.year,
+                "week": m.week,
+                "result": "L",
+                "score": m.score_a,
+                "opponent_score": m.score_b,
+            })
+            manager_results[mgr_name(m.team_b)].append({
+                "year": m.season.year,
+                "week": m.week,
+                "result": "W",
+                "score": m.score_b,
+                "opponent_score": m.score_a,
+            })
+    
+    # Calculate active streaks for each manager
+    streaks = []
+    
+    for mgr_name_str, results in manager_results.items():
+        if not results:
+            continue
+        
+        # Get the current (most recent) streak
+        latest_result = results[-1]
+        current_result_type = latest_result["result"]
+        
+        # Count back from the end to find the streak
+        streak_count = 1
+        for i in range(len(results) - 2, -1, -1):
+            if results[i]["result"] == current_result_type:
+                streak_count += 1
+            else:
+                break
+        
+        # Calculate days since streak started (from the first game in this streak to now)
+        streak_start_idx = len(results) - streak_count
+        if streak_start_idx > 0:
+            days_since_change = None
+            prev_game = results[streak_start_idx - 1]
+        else:
+            # Streak goes back to the beginning, estimate from oldest game
+            prev_game = results[0] if len(results) > 1 else None
+            days_since_change = "entire history" if len(results) > 1 else "N/A"
+        
+        streaks.append({
+            "manager": mgr_name_str,
+            "streak_type": current_result_type,
+            "streak_count": streak_count,
+            "latest_year": latest_result["year"],
+            "latest_week": latest_result["week"],
+            "latest_score": latest_result["score"],
+            "opponent_score": latest_result["opponent_score"],
+        })
+    
+    # Find hottest (longest winning streak)
+    hot_streaks = [s for s in streaks if s["streak_type"] == "W"]
+    hottest = max(hot_streaks, key=lambda x: x["streak_count"]) if hot_streaks else None
+    
+    # Find coldest (longest losing streak)
+    cold_streaks = [s for s in streaks if s["streak_type"] == "L"]
+    coldest = max(cold_streaks, key=lambda x: x["streak_count"]) if cold_streaks else None
+    
+    return render(request, "leaguehub/hottest_coldest.html", {
+        "hottest": hottest,
+        "coldest": coldest,
+    })
+
+
 def hall_view(request):
     def mgr_name(team):
         return team.manager.display_name if team and team.manager else (team.name if team else "Unknown")

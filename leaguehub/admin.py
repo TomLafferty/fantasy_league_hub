@@ -24,8 +24,23 @@ class SeasonAdmin(admin.ModelAdmin):
 
 @admin.register(ManagerProfile)
 class ManagerProfileAdmin(admin.ModelAdmin):
-    list_display = ["display_name", "yahoo_guid", "user"]
-    search_fields = ["display_name", "yahoo_guid"]
+    list_display = ["display_name", "user", "is_commissioner", "is_officer", "yahoo_guid"]
+    list_filter = ["is_commissioner", "is_officer"]
+    search_fields = ["display_name", "yahoo_guid", "user__username"]
+    readonly_fields = []
+
+    def get_fieldsets(self, request, obj=None):
+        base = [
+            (None, {"fields": ["display_name", "user", "yahoo_guid"]}),
+        ]
+        if request.user.is_superuser:
+            base.append(("League Roles", {"fields": ["is_commissioner", "is_officer"]}))
+        return base
+
+    def get_readonly_fields(self, request, obj=None):
+        if not request.user.is_superuser:
+            return ["is_commissioner", "is_officer"]
+        return []
 
 
 @admin.register(Team)
@@ -85,14 +100,8 @@ class TeamAccessForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filter out teams already assigned to any user (excluding current instance)
-        assigned_team_ids = TeamAccess.objects.values_list("team_id", flat=True)
-        if self.instance.pk:
-            assigned_team_ids = assigned_team_ids.exclude(pk=self.instance.pk)
         self.fields["team"].queryset = (
-            Team.objects.exclude(id__in=assigned_team_ids)
-            .select_related("season")
-            .order_by("-season__year", "name")
+            Team.objects.select_related("season").order_by("-season__year", "name")
         )
         self.fields["team"].label_from_instance = lambda t: f"{t.season.year} — {t.name}"
         self.fields["season"].queryset = Season.objects.order_by("-year")

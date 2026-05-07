@@ -638,17 +638,33 @@ def submit_keepers_view(request):
 
     previous_season = Season.objects.filter(year=season.year - 1).first()
 
-    # Ineligible: players on this roster who were kept last year
+    # Ineligible: players on this team's roster who were kept last year.
+    # Use the same fallback as the form: current season roster first, then previous season's.
     ineligible = []
     if previous_season:
-        roster_player_ids = RosterSnapshot.objects.filter(
-            season=season, team=team, is_final_roster=True
-        ).values_list("player_id", flat=True)
-        prior_records = (
-            KeeperRecord.objects.filter(season=previous_season, player_id__in=roster_player_ids)
-            .select_related("player", "team")
+        roster_player_ids = list(
+            RosterSnapshot.objects.filter(
+                season=season, team=team, is_final_roster=True
+            ).values_list("player_id", flat=True)
         )
-        ineligible = [{"player": r.player, "kept_by": r.team.name} for r in prior_records]
+        if not roster_player_ids:
+            previous_team_for_ineligible = Team.objects.filter(
+                season=previous_season, name=team.name
+            ).first()
+            if previous_team_for_ineligible:
+                roster_player_ids = list(
+                    RosterSnapshot.objects.filter(
+                        season=previous_season,
+                        team=previous_team_for_ineligible,
+                        is_final_roster=True,
+                    ).values_list("player_id", flat=True)
+                )
+        if roster_player_ids:
+            prior_records = (
+                KeeperRecord.objects.filter(season=previous_season, player_id__in=roster_player_ids)
+                .select_related("player", "team")
+            )
+            ineligible = [{"player": r.player, "kept_by": r.team.name} for r in prior_records]
 
     # Draft round each eligible player was picked in last season (for keeper cost display)
     # Undrafted players default to round 10
@@ -660,6 +676,14 @@ def submit_keepers_view(request):
         ).values("player_id", "round")
         player_rounds = {p["player_id"]: p["round"] for p in picks}
 
+    # Position info for each eligible player (for the keeper selection table)
+    from .models import Player as PlayerModel
+    eligible_ids = list(form.fields["players"].queryset.values_list("id", flat=True))
+    player_positions = {
+        p["id"]: p["primary_position"]
+        for p in PlayerModel.objects.filter(id__in=eligible_ids).values("id", "primary_position")
+    }
+
     return render(request, "leaguehub/submit_keepers.html", {
         "season": season,
         "team": team,
@@ -667,4 +691,5 @@ def submit_keepers_view(request):
         "current_submissions": current_submissions,
         "ineligible": ineligible,
         "player_rounds": player_rounds,
+        "player_positions": player_positions,
     })

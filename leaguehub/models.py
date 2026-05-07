@@ -448,7 +448,7 @@ class SleeperPlayer(models.Model):
     last_name = models.CharField(max_length=80, blank=True)
     position = models.CharField(max_length=10, blank=True)
     nfl_team = models.CharField(max_length=10, blank=True)
-    status = models.CharField(max_length=20, blank=True)
+    status = models.CharField(max_length=50, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

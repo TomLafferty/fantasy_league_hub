@@ -49,7 +49,7 @@
     <tbody>
       {% for checkbox in form.players %}
         {% with pid=checkbox.data.value %}
-        <tr class="keeper-row" data-player-id="{{ pid }}" data-round="{{ player_rounds|default_if_none:'' }}">
+        <tr class="keeper-row" data-player-id="{{ pid }}" data-round="10">
           <td>{{ checkbox.tag }}</td>
           <td style="color:#222"><label class="fw-semibold" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label></td>
           <td class="text-muted small player-position"></td>
@@ -69,14 +69,17 @@
 </form>
 
 {{ player_rounds|json_script:"player-rounds-data" }}
+{{ player_positions|json_script:"player-positions-data" }}
 <script>
 const playerRounds = JSON.parse(document.getElementById('player-rounds-data').textContent);
+const playerPositions = JSON.parse(document.getElementById('player-positions-data').textContent);
 
-// Populate round/cost cells and wire up checkboxes
+// Populate position/round/cost cells and wire up checkboxes
 document.querySelectorAll('.keeper-row').forEach(row => {
   const pid = parseInt(row.dataset.playerId);
   const round = playerRounds[pid] || 10;
   const undrafted = !playerRounds[pid];
+  row.querySelector('.player-position').textContent = playerPositions[pid] || '';
   row.querySelector('.player-draft-round').textContent = undrafted ? 'Undrafted (R10)' : `Round ${round}`;
   row.dataset.round = round;
 });

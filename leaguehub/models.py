@@ -269,6 +269,37 @@ class DraftMedia(models.Model):
         return f"{self.draft} — {self.file.name}"
 
 
+class MediaReaction(models.Model):
+    LOVE = "love"
+    LIKE = "like"
+    HATE = "hate"
+    REACTION_CHOICES = [(LOVE, "❤️"), (LIKE, "👍"), (HATE, "👎")]
+
+    media = models.ForeignKey(DraftMedia, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="media_reactions")
+    reaction = models.CharField(max_length=10, choices=REACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("media", "user")
+
+    def __str__(self):
+        return f"{self.user} {self.reaction} on {self.media_id}"
+
+
+class MediaComment(models.Model):
+    media = models.ForeignKey(DraftMedia, on_delete=models.CASCADE, related_name="media_comments")
+    text = models.TextField()
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.author} on {self.media_id}: {self.text[:40]}"
+
+
 class DraftComment(models.Model):
     draft = models.ForeignKey(Draft, on_delete=models.CASCADE, related_name="comments")
     text = models.TextField()

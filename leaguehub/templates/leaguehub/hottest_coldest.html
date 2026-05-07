@@ -15,7 +15,7 @@
       <div style="color: #88d888; font-size: 0.85rem; margin-top: 0.2rem;">
         Avg margin of victory: <strong style="color: #00ff50;">+{{ all_time_hot.avg_margin }} pts</strong>
         &nbsp;·&nbsp; {{ all_time_hot.first_year }} W{{ all_time_hot.first_week }} &ndash; {{ all_time_hot.last_year }} W{{ all_time_hot.last_week }}
-        &nbsp;·&nbsp; {{ all_time_hot.streak_days }} calendar days
+        &nbsp;·&nbsp; {{ all_time_hot.streak_days }} calendar days{% if all_time_hot.is_active %} and counting{% endif %}
       </div>
     </div>
   </div>
@@ -29,7 +29,7 @@
       <div style="color: #d88888; font-size: 0.85rem; margin-top: 0.2rem;">
         Avg margin of defeat: <strong style="color: #ff6666;">-{{ all_time_cold.avg_margin }} pts</strong>
         &nbsp;·&nbsp; {{ all_time_cold.first_year }} W{{ all_time_cold.first_week }} &ndash; {{ all_time_cold.last_year }} W{{ all_time_cold.last_week }}
-        &nbsp;·&nbsp; {{ all_time_cold.streak_days }} calendar days
+        &nbsp;·&nbsp; {{ all_time_cold.streak_days }} calendar days{% if all_time_cold.is_active %} and counting{% endif %}
       </div>
     </div>
   </div>

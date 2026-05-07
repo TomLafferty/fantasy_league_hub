@@ -249,9 +249,11 @@ def hottest_coldest_view(request):
     
     from datetime import date, timedelta
 
-    def week_to_approx_date(year, week):
-        # NFL Week 1 starts around September 5; each week adds 7 days
-        return date(year, 9, 5) + timedelta(weeks=week - 1)
+    def week_to_monday(year, week):
+        # Find the Monday of NFL Week 1: Monday of the week containing Sep 5
+        base = date(year, 9, 5)
+        week1_monday = base - timedelta(days=base.weekday())
+        return week1_monday + timedelta(weeks=week - 1)
 
     today = date.today()
 
@@ -284,8 +286,13 @@ def hottest_coldest_view(request):
                 for g in games:
                     g.setdefault("margin", round(abs(g["score"] - g["opponent_score"]), 2))
                 avg = round(sum(g["margin"] for g in games) / count, 2)
-                first_date = week_to_approx_date(games[0]["year"], games[0]["week"])
-                last_date = week_to_approx_date(games[-1]["year"], games[-1]["week"])
+                # Streak is still active if its last game is the manager's most recent game
+                is_active = (
+                    games[-1]["year"] == results[-1]["year"]
+                    and games[-1]["week"] == results[-1]["week"]
+                )
+                first_monday = week_to_monday(games[0]["year"], games[0]["week"])
+                end_date = today if is_active else week_to_monday(games[-1]["year"], games[-1]["week"])
                 record = {
                     "manager": mgr_name_str,
                     "streak_count": count,
@@ -294,7 +301,8 @@ def hottest_coldest_view(request):
                     "first_week": games[0]["week"],
                     "last_year": games[-1]["year"],
                     "last_week": games[-1]["week"],
-                    "streak_days": (last_date - first_date).days,
+                    "streak_days": (end_date - first_monday).days,
+                    "is_active": is_active,
                 }
                 if target == "W":
                     all_time_hot = record
@@ -328,7 +336,7 @@ def hottest_coldest_view(request):
 
         # Calendar days: from the first game in the streak to today
         first_game = streak_games[0]
-        streak_start_date = week_to_approx_date(first_game["year"], first_game["week"])
+        streak_start_date = week_to_monday(first_game["year"], first_game["week"])
         streak_days = (today - streak_start_date).days
 
         streaks.append({

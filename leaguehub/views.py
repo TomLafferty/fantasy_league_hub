@@ -899,3 +899,77 @@ def draft_add_media_view(request, draft_id):
         media.uploaded_by = request.user
         media.save()
     return redirect(f"/drafts/?season={draft.season_id}")
+
+
+# ── COMMISSIONER KEEPER REVIEW ───────────────────────────────────────────────
+
+@login_required
+def commissioner_keepers_view(request):
+    season = Season.objects.filter(is_current=True).first()
+    if not season:
+        raise Http404("No current season configured.")
+
+    official = is_league_official(request.user)
+
+    if request.method == "POST" and official:
+        team_id = request.POST.get("clear_team_id")
+        if team_id:
+            KeeperSubmission.objects.filter(season=season, team_id=team_id).delete()
+            messages.success(request, "Keeper submission cleared.")
+        return redirect("commissioner_keepers")
+
+    previous_season = Season.objects.filter(year=season.year - 1).first()
+
+    player_rounds = {}
+    if previous_season:
+        picks = DraftPick.objects.filter(
+            season=previous_season,
+            player__isnull=False,
+        ).values("player_id", "round")
+        player_rounds = {p["player_id"]: p["round"] for p in picks}
+
+    teams = Team.objects.filter(season=season).order_by("name")
+    all_submissions = (
+        KeeperSubmission.objects.filter(season=season)
+        .select_related("player", "team")
+    )
+    by_team = {}
+    for sub in all_submissions:
+        by_team.setdefault(sub.team_id, []).append(sub)
+
+    team_data = []
+    for team in teams:
+        subs = by_team.get(team.id, [])
+        players = []
+        rounds = []
+        for sub in subs:
+            pid = sub.player_id
+            round_val = player_rounds.get(pid, 10)
+            players.append({"player": sub.player, "round": round_val, "undrafted": pid not in player_rounds})
+            rounds.append(round_val)
+
+        # Compute pick costs (same-round penalty)
+        if len(rounds) == 2 and rounds[0] == rounds[1]:
+            r = rounds[0]
+            preceding = max(1, r - 1)
+            costs = [f"R{r}", f"R{preceding}"]
+            cost_label = f"Round {r}, Round {preceding} (same-round penalty)"
+        else:
+            costs = [f"R{r}" for r in rounds]
+            cost_label = ", ".join(f"Round {r}" for r in rounds) if rounds else "—"
+
+        for i, p in enumerate(players):
+            p["cost"] = costs[i] if i < len(costs) else "—"
+
+        team_data.append({
+            "team": team,
+            "players": players,
+            "cost_label": cost_label,
+            "submitted": bool(subs),
+        })
+
+    return render(request, "leaguehub/keeper_review.html", {
+        "season": season,
+        "team_data": team_data,
+        "is_official": official,
+    })

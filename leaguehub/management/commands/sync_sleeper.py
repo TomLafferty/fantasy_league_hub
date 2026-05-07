@@ -85,12 +85,12 @@ class Command(BaseCommand):
                     _, was_created = SleeperPlayer.objects.update_or_create(
                         sleeper_id=sleeper_id,
                         defaults={
-                            "full_name": p.get("full_name", ""),
-                            "first_name": p.get("first_name", ""),
-                            "last_name": p.get("last_name", ""),
-                            "position": p.get("position", ""),
-                            "nfl_team": p.get("team", ""),
-                            "status": p.get("status", ""),
+                            "full_name": p.get("full_name") or "",
+                            "first_name": p.get("first_name") or "",
+                            "last_name": p.get("last_name") or "",
+                            "position": p.get("position") or "",
+                            "nfl_team": p.get("team") or "",
+                            "status": p.get("status") or "",
                         },
                     )
                     if was_created:

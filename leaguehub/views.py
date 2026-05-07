@@ -191,43 +191,51 @@ def hottest_coldest_view(request):
                 "opponent_score": m.score_a,
             })
     
+    from datetime import date, timedelta
+
+    def week_to_approx_date(year, week):
+        # NFL Week 1 starts around September 5; each week adds 7 days
+        return date(year, 9, 5) + timedelta(weeks=week - 1)
+
+    today = date.today()
+
     # Calculate active streaks for each manager
     streaks = []
-    
+
     for mgr_name_str, results in manager_results.items():
         if not results:
             continue
-        
+
         # Get the current (most recent) streak
         latest_result = results[-1]
         current_result_type = latest_result["result"]
-        
-        # Count back from the end to find the streak
-        streak_count = 1
+
+        # Collect all games in the streak (walking back from the end)
+        streak_games = [latest_result]
         for i in range(len(results) - 2, -1, -1):
             if results[i]["result"] == current_result_type:
-                streak_count += 1
+                streak_games.insert(0, results[i])
             else:
                 break
-        
-        # Calculate days since streak started (from the first game in this streak to now)
-        streak_start_idx = len(results) - streak_count
-        if streak_start_idx > 0:
-            days_since_change = None
-            prev_game = results[streak_start_idx - 1]
-        else:
-            # Streak goes back to the beginning, estimate from oldest game
-            prev_game = results[0] if len(results) > 1 else None
-            days_since_change = "entire history" if len(results) > 1 else "N/A"
-        
+        streak_count = len(streak_games)
+
+        # Add per-game margin and compute average
+        for g in streak_games:
+            g["margin"] = round(abs(g["score"] - g["opponent_score"]), 2)
+        avg_margin = round(sum(g["margin"] for g in streak_games) / len(streak_games), 2)
+
+        # Calendar days: from the first game in the streak to today
+        first_game = streak_games[0]
+        streak_start_date = week_to_approx_date(first_game["year"], first_game["week"])
+        streak_days = (today - streak_start_date).days
+
         streaks.append({
             "manager": mgr_name_str,
             "streak_type": current_result_type,
             "streak_count": streak_count,
-            "latest_year": latest_result["year"],
-            "latest_week": latest_result["week"],
-            "latest_score": latest_result["score"],
-            "opponent_score": latest_result["opponent_score"],
+            "streak_games": streak_games,
+            "avg_margin": avg_margin,
+            "streak_days": streak_days,
         })
     
     # Find hottest (longest winning streak)

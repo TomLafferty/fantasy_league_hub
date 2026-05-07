@@ -313,6 +313,31 @@ class DraftComment(models.Model):
         return f"{self.draft} — {self.author.username}"
 
 
+class Transaction(models.Model):
+    TYPE_ADD = "add"
+    TYPE_DROP = "drop"
+    TYPE_TRADE = "trade"
+    TYPE_CHOICES = [
+        (TYPE_ADD, "Add"),
+        (TYPE_DROP, "Drop"),
+        (TYPE_TRADE, "Trade"),
+    ]
+
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="transactions")
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    team_name = models.CharField(max_length=150, blank=True)
+    player_name = models.CharField(max_length=150, blank=True)
+    detail = models.CharField(max_length=400, blank=True)
+    occurred_at = models.DateTimeField()
+    yahoo_transaction_id = models.CharField(max_length=100, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ["-occurred_at"]
+
+    def __str__(self):
+        return f"{self.occurred_at.date()} {self.type}: {self.player_name} ({self.team_name})"
+
+
 class KeeperSubmission(models.Model):
     season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="keeper_submissions")
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="keeper_submissions")

@@ -1,19 +1,139 @@
 {% extends "leaguehub/base.html" %}
-{% block title %}{{ league_name }} Hub{% endblock %}
+{% block title %}Fantasy Football Ultra Premium Association{% endblock %}
 {% block content %}
-<h1>{{ league_name }} Hub</h1>
-<p>League history, standings, keepers, and manager tools.</p>
 
-{% if current_season %}
-  <p><strong>Current season:</strong> {{ current_season.year }}</p>
+{# ── HERO ── #}
+<div class="text-center py-4 mb-5" style="border-bottom:1px solid rgba(var(--accent-rgb),.2);">
+  {% if league_logo_url %}
+  <img src="{{ league_logo_url }}" alt="FFUPA Logo"
+       style="width:150px; height:150px; object-fit:contain; border-radius:10px;
+              box-shadow:0 0 50px rgba(var(--accent-rgb),.55), 0 0 100px rgba(var(--accent-rgb),.2);
+              margin-bottom:1.5rem; display:block; margin-left:auto; margin-right:auto;">
+  {% endif %}
+  <h1 style="font-size:clamp(1.1rem,3.5vw,1.9rem); color:var(--accent);
+             text-shadow:0 0 25px rgba(var(--accent-rgb),.65); letter-spacing:.04em; margin-bottom:.6rem;">
+    Fantasy Football Ultra Premium Association
+  </h1>
+  <div style="color:#777; font-size:.8rem; letter-spacing:.2em; text-transform:uppercase; margin-bottom:.4rem;">
+    FFUPA &nbsp;·&nbsp; Est. 2009 &nbsp;·&nbsp; 10 Managers Strong
+  </div>
+  {% if current_season %}
+  <div style="font-size:.78rem; color:rgba(var(--accent-rgb),.7); letter-spacing:.08em;">
+    Season {{ current_season.year }} is underway
+  </div>
+  {% endif %}
+</div>
+
+{# ── THE LEGEND ── #}
+<div class="mb-5 p-4" style="background:rgba(var(--accent-rgb),.03); border:1px solid rgba(var(--accent-rgb),.14); border-radius:4px;">
+  <h4 style="color:var(--accent); margin-bottom:1rem; font-size:.85rem; text-transform:uppercase; letter-spacing:.15em;">
+    ★ The Legend of FFUPA ★
+  </h4>
+  <div style="color:#b8b8b8; font-size:.91rem; line-height:1.82;">
+    <p>In the autumn of 2009, deep in the uncharted wilderness of a Philadelphia-area living room, two men — driven by equal parts ambition and absolutely no understanding of PPR scoring — scratched a league constitution onto whatever was nearby and proclaimed the Fantasy Football Ultra Premium Association into existence. They chose the name not because anything about it was ultra, premium, or particularly associative, but because the argument over the name had already consumed three hours and a full case of beer.</p>
+    <p>The early years were not glamorous. Rosters were managed from flip phones. Injury reports were discovered on Tuesdays. The commissioner's judgment was questioned at every meeting and trusted by no one. It was, in other words, exactly what it needed to be.</p>
+    <p>Two founding members did not survive the journey. Their names are spoken only in whispers — not out of disrespect, but because frankly most people have forgotten them. What they left behind was something greater: the precedent that anyone could join, anyone could compete, and anyone could be publicly humiliated on a group text by Sunday afternoon. From their absence grew a league of ten — ten managers, ten philosophies, ten deeply personal approaches to ignoring injury news until it is too late.</p>
+    <p class="mb-0">Today, FFUPA stands as the single most consequential institution on planet Earth. More stable than any government. More dramatic than any sport. More unhinged than any group chat you have ever been in. Scientists have studied it. Philosophers have cited it. No fewer than zero international treaties reference it. We are, simply, FFUPA — and we have been, since that living room, since that beer, since those two guys who didn't make it.</p>
+  </div>
+</div>
+
+{# ── CHAMPION + LAST PLACE ── #}
+<div class="row mb-5 g-4">
+
+  {# Current / Most Recent Champion #}
+  <div class="col-lg-7">
+    <div style="padding:1.8rem; background:rgba(var(--accent-rgb),.06); border:1px solid rgba(var(--accent-rgb),.4);
+                border-radius:6px; box-shadow:0 0 30px rgba(var(--accent-rgb),.1); height:100%;">
+      {% if latest_champion %}
+      <div style="font-size:.68rem; text-transform:uppercase; letter-spacing:.18em; color:rgba(var(--accent-rgb),.8); margin-bottom:.5rem;">
+        🏆 {% if latest_champion.season.is_current %}Current Champion{% else %}{{ latest_champion.season.year }} Champion{% endif %}
+      </div>
+      <div style="font-size:clamp(1.4rem,3vw,2.2rem); font-weight:700; color:#eaeaea;
+                  text-shadow:0 0 20px rgba(var(--accent-rgb),.5); line-height:1.2; margin-bottom:.4rem;">
+        {{ latest_champion.team.name }}
+      </div>
+      {% if latest_champion.team.manager %}
+      <div style="font-size:1rem; color:rgba(var(--accent-rgb),.9); margin-bottom:.8rem;">
+        {{ latest_champion.team.manager.display_name }}
+      </div>
+      {% endif %}
+      {% if latest_champion.notes %}
+      <div style="font-size:.82rem; color:#888; font-style:italic;">{{ latest_champion.notes }}</div>
+      {% endif %}
+      {% if not latest_champion.season.is_current %}
+      <div style="margin-top:.8rem; font-size:.75rem; color:#555;">
+        No champion crowned yet for the current season
+      </div>
+      {% endif %}
+      {% else %}
+      <div style="color:#555; font-size:.9rem;">No champion data yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Last Place #}
+  <div class="col-lg-5">
+    <div style="padding:1.3rem; background:rgba(80,0,0,.06); border:1px solid rgba(180,40,40,.22);
+                border-radius:6px; height:100%;">
+      {% if last_place %}
+      <div style="font-size:.65rem; text-transform:uppercase; letter-spacing:.16em; color:#884444; margin-bottom:.4rem;">
+        🚽 {% if lp_season and lp_season.is_current %}Current Last Place{% else %}{{ lp_season.year }} Last Place{% endif %}
+      </div>
+      <div style="font-size:1.3rem; font-weight:600; color:#cc7777; margin-bottom:.25rem;">
+        {{ last_place.team.name }}
+      </div>
+      {% if last_place.team.manager %}
+      <div style="font-size:.88rem; color:#884444;">{{ last_place.team.manager.display_name }}</div>
+      {% endif %}
+      <div style="font-size:.78rem; color:#663333; margin-top:.5rem;">
+        {{ last_place.wins }}–{{ last_place.losses }}{% if last_place.ties %}–{{ last_place.ties }}{% endif %}
+        &nbsp;·&nbsp; Rank #{{ last_place.rank }}
+      </div>
+      {% else %}
+      <div style="color:#555; font-size:.85rem;">No standings data yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── RECENT TRANSACTIONS ── #}
+{% if recent_transactions %}
+<div class="mb-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 style="margin:0; font-size:.9rem; text-transform:uppercase; letter-spacing:.12em; color:var(--accent);">
+      Recent Transactions
+    </h4>
+    <a href="/transactions/" style="font-size:.75rem; color:rgba(var(--accent-rgb),.7);">View all →</a>
+  </div>
+  <div style="border:1px solid rgba(var(--accent-rgb),.15); border-radius:4px; overflow:hidden;">
+    {% for tx in recent_transactions %}
+    <div class="d-flex align-items-start gap-3"
+         style="padding:.55rem .9rem; border-bottom:1px solid rgba(var(--accent-rgb),.08);">
+      <div style="flex-shrink:0; font-size:.9rem; padding-top:.05rem;">
+        {% if tx.type == 'add' %}🟢{% elif tx.type == 'drop' %}🔴{% else %}🔄{% endif %}
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:.83rem; color:#ddd;">
+          {% if tx.type == 'add' %}
+          <span style="color:#55cc77; font-weight:600;">{{ tx.get_type_display }}</span>
+          {% elif tx.type == 'drop' %}
+          <span style="color:#cc5555; font-weight:600;">{{ tx.get_type_display }}</span>
+          {% else %}
+          <span style="color:#88aacc; font-weight:600;">{{ tx.get_type_display }}</span>
+          {% endif %}
+          &nbsp;—&nbsp;
+          <strong style="color:#eee;">{{ tx.player_name }}</strong>
+          {% if tx.team_name %}<span style="color:#888;"> · {{ tx.team_name }}</span>{% endif %}
+        </div>
+        {% if tx.detail %}<div style="font-size:.73rem; color:#555; margin-top:.1rem;">{{ tx.detail }}</div>{% endif %}
+      </div>
+      <div style="flex-shrink:0; font-size:.7rem; color:#555; white-space:nowrap; padding-top:.1rem;">
+        {{ tx.occurred_at|date:"M j" }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
 {% endif %}
 
-<h3>Recent Champions</h3>
-<ul class="list-group">
-  {% for c in recent_champions %}
-    <li class="list-group-item">{{ c.season.year }} — <strong>{{ c.team.name }}</strong></li>
-  {% empty %}
-    <li class="list-group-item">No champions entered yet.</li>
-  {% endfor %}
-</ul>
 {% endblock %}

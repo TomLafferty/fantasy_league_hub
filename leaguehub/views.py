@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import DraftCommentForm, DraftForm, DraftMediaForm, KeeperDeadlineForm, KeeperSubmissionForm
-from .models import Champion, Draft, DraftComment, DraftMedia, DraftPick, KeeperRecord, KeeperSubmission, Matchup, MediaComment, MediaReaction, PlayerWeeklyScore, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
+from .models import Champion, Draft, DraftComment, DraftMedia, DraftPick, KeeperRecord, KeeperSubmission, Matchup, MediaComment, MediaReaction, PlayerWeeklyScore, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess, Transaction
 
 
 def is_league_official(user):
@@ -60,16 +60,74 @@ def fetch_og_images(url):
 
 def home(request):
     current_season = Season.objects.filter(is_current=True).first()
-    recent_champions = Champion.objects.select_related("season", "team").order_by("-season__year")[:10]
+    fallback_season = current_season or Season.objects.order_by("-year").first()
+
+    # Most recent champion record
+    latest_champion = (
+        Champion.objects.select_related("season", "team__manager")
+        .order_by("-season__year")
+        .first()
+    )
+
+    # Last place: current season standings if they exist, else most recent season with standings
+    last_place = None
+    lp_season = None
+    for season in ([fallback_season] if fallback_season else []):
+        lp = (
+            Standing.objects.filter(season=season)
+            .select_related("team__manager")
+            .order_by("-rank")
+            .first()
+        )
+        if lp:
+            last_place = lp
+            lp_season = season
+            break
+    if not last_place:
+        for season in Season.objects.order_by("-year"):
+            lp = (
+                Standing.objects.filter(season=season)
+                .select_related("team__manager")
+                .order_by("-rank")
+                .first()
+            )
+            if lp:
+                last_place = lp
+                lp_season = season
+                break
+
+    recent_transactions = list(
+        Transaction.objects.filter(season=fallback_season)
+        .order_by("-occurred_at")[:15]
+    ) if fallback_season else []
+
     return render(request, "leaguehub/home.html", {
         "current_season": current_season,
-        "recent_champions": recent_champions,
+        "latest_champion": latest_champion,
+        "last_place": last_place,
+        "lp_season": lp_season,
+        "recent_transactions": recent_transactions,
     })
 
 
 def champions_view(request):
     champions = Champion.objects.select_related("season", "team").order_by("-season__year")
     return render(request, "leaguehub/champions.html", {"champions": champions})
+
+
+def transactions_view(request):
+    seasons = Season.objects.all().order_by("-year")
+    selected_id = request.GET.get("season")
+    selected_season = seasons.first() if not selected_id else get_object_or_404(Season, id=selected_id)
+    transactions = (
+        Transaction.objects.filter(season=selected_season).order_by("-occurred_at")
+        if selected_season else Transaction.objects.none()
+    )
+    return render(request, "leaguehub/transactions.html", {
+        "seasons": seasons,
+        "selected_season": selected_season,
+        "transactions": transactions,
+    })
 
 
 def standings_view(request):

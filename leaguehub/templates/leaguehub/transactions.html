@@ -1,0 +1,70 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Transactions — {{ league_name }} Hub{% endblock %}
+{% block nav_transactions %}active{% endblock %}
+{% block content %}
+<h1>Transactions</h1>
+
+{% if not seasons %}
+  <p class="text-muted">No seasons found.</p>
+{% else %}
+
+<form method="get" class="d-flex align-items-center gap-2 mb-4">
+  <label class="form-label mb-0" style="color:#aaa; white-space:nowrap;">Select year:</label>
+  <select name="season" class="form-select form-select-sm" style="max-width:120px;" onchange="this.form.submit()">
+    {% for s in seasons %}
+      <option value="{{ s.id }}" {% if s.id == selected_season.id %}selected{% endif %}>
+        {{ s.year }}{% if s.is_current %} ★{% endif %}
+      </option>
+    {% endfor %}
+  </select>
+</form>
+
+{% if transactions %}
+<div style="border:1px solid rgba(var(--accent-rgb),.18); border-radius:4px; overflow:hidden;">
+  <table class="table table-dark table-sm mb-0" style="border-color:rgba(var(--accent-rgb),.1);">
+    <thead>
+      <tr style="font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;">
+        <th style="width:80px;">Date</th>
+        <th style="width:60px;">Type</th>
+        <th>Player</th>
+        <th>Team</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tx in transactions %}
+      <tr style="font-size:.85rem;">
+        <td style="color:#666; white-space:nowrap;">{{ tx.occurred_at|date:"M j, Y" }}</td>
+        <td>
+          {% if tx.type == 'add' %}
+          <span style="color:#55cc77; font-weight:600; font-size:.75rem;">🟢 ADD</span>
+          {% elif tx.type == 'drop' %}
+          <span style="color:#cc5555; font-weight:600; font-size:.75rem;">🔴 DROP</span>
+          {% else %}
+          <span style="color:#88aacc; font-weight:600; font-size:.75rem;">🔄 TRADE</span>
+          {% endif %}
+        </td>
+        <td style="color:#eee; font-weight:500;">{{ tx.player_name }}</td>
+        <td style="color:#aaa;">{{ tx.team_name }}</td>
+        <td style="color:#666; font-size:.78rem;">{{ tx.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div style="font-size:.72rem; color:#444; margin-top:.5rem; text-align:right;">
+  {{ transactions|length }} transaction{{ transactions|length|pluralize }} for {{ selected_season.year }}
+</div>
+
+{% else %}
+<div style="padding:2.5rem 1rem; text-align:center; border:1px solid rgba(var(--accent-rgb),.1); border-radius:4px; color:#444;">
+  <div style="font-size:1.4rem; margin-bottom:.5rem;">📋</div>
+  <div style="font-size:.88rem;">No transactions recorded for {{ selected_season.year }}.</div>
+  <div style="font-size:.75rem; margin-top:.4rem; color:#333;">
+    Run <code style="color:#555;">manage.py sync_transactions --season {{ selected_season.year }} --access-token &lt;token&gt;</code> to import from Yahoo.
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

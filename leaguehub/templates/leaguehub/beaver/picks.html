@@ -1,0 +1,45 @@
+{% extends "leaguehub/base.html" %}
+{% load beaver_tags %}
+{% block title %}Traded Picks — BEAVER{% endblock %}
+{% block beaver_nav_picks %}active{% endblock %}
+{% block content %}
+<h1>Traded Picks</h1>
+
+{% if not league %}
+<div class="alert alert-secondary">No league data. Run <code>sync_sleeper</code> to get started.</div>
+{% elif not grouped_picks %}
+<div class="alert alert-secondary">No traded picks on record for this season.</div>
+{% else %}
+{% for season_year, picks in grouped_picks %}
+<h5 style="color:var(--accent); margin-top:1.5rem; margin-bottom:.5rem;">{{ season_year }}</h5>
+<div class="table-responsive mb-3">
+  <table class="table table-sm table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Round</th>
+        <th>Original Owner</th>
+        <th>Previous Owner</th>
+        <th>Current Holder</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in picks %}
+      <tr>
+        <td style="color:var(--accent);">Rd {{ p.round }}</td>
+        <td style="font-size:.82rem;">
+          {% with r=roster_map|get_item:p.roster_id %}{{ r.manager.display_name|default:r.team_name|default:p.roster_id }}{% endwith %}
+        </td>
+        <td style="font-size:.82rem; color:#888;">
+          {% with r=roster_map|get_item:p.previous_owner_id %}{{ r.manager.display_name|default:r.team_name|default:p.previous_owner_id }}{% endwith %}
+        </td>
+        <td style="font-size:.82rem; font-weight:600;">
+          {% with r=roster_map|get_item:p.owner_id %}{{ r.manager.display_name|default:r.team_name|default:p.owner_id }}{% endwith %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

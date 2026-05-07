@@ -1,0 +1,34 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Hall of Fame — BEAVER{% endblock %}
+{% block beaver_nav_hall %}active{% endblock %}
+{% block content %}
+<h1>Hall of Fame</h1>
+<p style="color:#888; font-size:.85rem;">BEAVER Dynasty champions throughout the ages.</p>
+
+{% if not champions %}
+<div class="alert alert-secondary">No champions yet — season still in progress.</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Season</th>
+        <th>Champion</th>
+        <th>Team</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for champ in champions %}
+      <tr>
+        <td style="color:var(--accent); font-weight:600; font-size:1rem;">{{ champ.league.season_year }}</td>
+        <td style="font-size:.9rem;">{{ champ.roster.manager.display_name|default:"—" }}</td>
+        <td style="font-size:.82rem; color:#888;">{{ champ.roster.team_name|default:"—" }}</td>
+        <td style="font-size:.78rem; color:#666;">{{ champ.notes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

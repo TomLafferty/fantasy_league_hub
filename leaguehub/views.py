@@ -252,171 +252,39 @@ def vote_rule_view(request, proposal_id):
 
 
 def hottest_coldest_view(request):
-    """Show the hottest (longest winning streak) and coldest (longest losing streak) managers."""
-    from datetime import datetime
-    
+    from .streak_utils import compute_all_time_records, compute_active_streaks
+
     def mgr_name(team):
         return team.manager.display_name if team and team.manager else (team.name if team else "Unknown")
 
-    # Get all matchups ordered by season year and week
     all_matchups = list(
         Matchup.objects.select_related("team_a__manager", "team_b__manager", "season")
         .order_by("season__year", "week")
     )
-    
+
     if not all_matchups:
         return render(request, "leaguehub/hottest_coldest.html", {
-            "hottest": None,
-            "coldest": None,
+            "hottest": None, "coldest": None,
         })
 
-    # Build a timeline of results for each manager
-    manager_results = defaultdict(list)  # manager_name -> [(year, week, result)]
-    
+    manager_results = defaultdict(list)
     for m in all_matchups:
         if m.score_a > m.score_b:
-            manager_results[mgr_name(m.team_a)].append({
-                "year": m.season.year,
-                "week": m.week,
-                "result": "W",
-                "score": m.score_a,
-                "opponent_score": m.score_b,
-            })
-            manager_results[mgr_name(m.team_b)].append({
-                "year": m.season.year,
-                "week": m.week,
-                "result": "L",
-                "score": m.score_b,
-                "opponent_score": m.score_a,
-            })
+            manager_results[mgr_name(m.team_a)].append({"year": m.season.year, "week": m.week, "result": "W", "score": m.score_a, "opponent_score": m.score_b})
+            manager_results[mgr_name(m.team_b)].append({"year": m.season.year, "week": m.week, "result": "L", "score": m.score_b, "opponent_score": m.score_a})
         elif m.score_b > m.score_a:
-            manager_results[mgr_name(m.team_a)].append({
-                "year": m.season.year,
-                "week": m.week,
-                "result": "L",
-                "score": m.score_a,
-                "opponent_score": m.score_b,
-            })
-            manager_results[mgr_name(m.team_b)].append({
-                "year": m.season.year,
-                "week": m.week,
-                "result": "W",
-                "score": m.score_b,
-                "opponent_score": m.score_a,
-            })
-    
-    from datetime import date, timedelta
+            manager_results[mgr_name(m.team_a)].append({"year": m.season.year, "week": m.week, "result": "L", "score": m.score_a, "opponent_score": m.score_b})
+            manager_results[mgr_name(m.team_b)].append({"year": m.season.year, "week": m.week, "result": "W", "score": m.score_b, "opponent_score": m.score_a})
 
-    def week_to_monday(year, week):
-        # Find the Monday of NFL Week 1: Monday of the week containing Sep 5
-        base = date(year, 9, 5)
-        week1_monday = base - timedelta(days=base.weekday())
-        return week1_monday + timedelta(weeks=week - 1)
+    all_time_hot, all_time_cold = compute_all_time_records(manager_results)
+    streaks = compute_active_streaks(manager_results)
 
-    today = date.today()
-
-    def best_streak_games(results, target):
-        """Return the games belonging to the longest streak of `target` result type."""
-        best_start, best_len = 0, 0
-        cur_start, cur_len = 0, 0
-        for i, g in enumerate(results):
-            if g["result"] == target:
-                if cur_len == 0:
-                    cur_start = i
-                cur_len += 1
-                if cur_len > best_len:
-                    best_len = cur_len
-                    best_start = cur_start
-            else:
-                cur_len = 0
-        return results[best_start: best_start + best_len]
-
-    # All-time records: longest win streak and longest loss streak across all history
-    all_time_hot = None
-    all_time_cold = None
-    for mgr_name_str, results in manager_results.items():
-        for target, current_record in [("W", all_time_hot), ("L", all_time_cold)]:
-            games = best_streak_games(results, target)
-            if not games:
-                continue
-            count = len(games)
-            if current_record is None or count > current_record["streak_count"]:
-                for g in games:
-                    g.setdefault("margin", round(abs(g["score"] - g["opponent_score"]), 2))
-                avg = round(sum(g["margin"] for g in games) / count, 2)
-                # Streak is still active if its last game is the manager's most recent game
-                is_active = (
-                    games[-1]["year"] == results[-1]["year"]
-                    and games[-1]["week"] == results[-1]["week"]
-                )
-                first_monday = week_to_monday(games[0]["year"], games[0]["week"])
-                end_date = today if is_active else week_to_monday(games[-1]["year"], games[-1]["week"])
-                record = {
-                    "manager": mgr_name_str,
-                    "streak_count": count,
-                    "avg_margin": avg,
-                    "first_year": games[0]["year"],
-                    "first_week": games[0]["week"],
-                    "last_year": games[-1]["year"],
-                    "last_week": games[-1]["week"],
-                    "streak_days": (end_date - first_monday).days,
-                    "is_active": is_active,
-                }
-                if target == "W":
-                    all_time_hot = record
-                else:
-                    all_time_cold = record
-
-    # Calculate active streaks for each manager
-    streaks = []
-
-    for mgr_name_str, results in manager_results.items():
-        if not results:
-            continue
-
-        # Get the current (most recent) streak
-        latest_result = results[-1]
-        current_result_type = latest_result["result"]
-
-        # Collect all games in the streak (walking back from the end)
-        streak_games = [latest_result]
-        for i in range(len(results) - 2, -1, -1):
-            if results[i]["result"] == current_result_type:
-                streak_games.insert(0, results[i])
-            else:
-                break
-        streak_count = len(streak_games)
-
-        # Add per-game margin and compute average
-        for g in streak_games:
-            g["margin"] = round(abs(g["score"] - g["opponent_score"]), 2)
-        avg_margin = round(sum(g["margin"] for g in streak_games) / len(streak_games), 2)
-
-        # Calendar days: from the first game in the streak to today
-        first_game = streak_games[0]
-        streak_start_date = week_to_monday(first_game["year"], first_game["week"])
-        streak_days = (today - streak_start_date).days
-
-        streaks.append({
-            "manager": mgr_name_str,
-            "streak_type": current_result_type,
-            "streak_count": streak_count,
-            "streak_games": streak_games,
-            "avg_margin": avg_margin,
-            "streak_days": streak_days,
-        })
-    
-    # Find hottest (longest winning streak)
     hot_streaks = [s for s in streaks if s["streak_type"] == "W"]
-    hottest = max(hot_streaks, key=lambda x: x["streak_count"]) if hot_streaks else None
-    
-    # Find coldest (longest losing streak)
     cold_streaks = [s for s in streaks if s["streak_type"] == "L"]
-    coldest = max(cold_streaks, key=lambda x: x["streak_count"]) if cold_streaks else None
-    
+
     return render(request, "leaguehub/hottest_coldest.html", {
-        "hottest": hottest,
-        "coldest": coldest,
+        "hottest": max(hot_streaks, key=lambda x: x["streak_count"]) if hot_streaks else None,
+        "coldest": max(cold_streaks, key=lambda x: x["streak_count"]) if cold_streaks else None,
         "all_time_hot": all_time_hot,
         "all_time_cold": all_time_cold,
     })
@@ -1049,21 +917,22 @@ def draft_add_media_view(request, draft_id):
 
 # ── SETTINGS ─────────────────────────────────────────────────────────────────
 
-@login_required
 def settings_view(request):
     from django.contrib.auth.forms import PasswordChangeForm
     from django.contrib.auth import update_session_auth_hash
 
-    if request.method == "POST":
-        form = PasswordChangeForm(request.user, request.POST)
-        if form.is_valid():
-            update_session_auth_hash(request, form.save())
-            messages.success(request, "Password updated.")
-            return redirect("settings")
-    else:
-        form = PasswordChangeForm(request.user)
+    password_form = None
+    if request.user.is_authenticated:
+        if request.method == "POST":
+            password_form = PasswordChangeForm(request.user, request.POST)
+            if password_form.is_valid():
+                update_session_auth_hash(request, password_form.save())
+                messages.success(request, "Password updated.")
+                return redirect("settings")
+        else:
+            password_form = PasswordChangeForm(request.user)
 
-    return render(request, "leaguehub/settings.html", {"password_form": form})
+    return render(request, "leaguehub/settings.html", {"password_form": password_form})
 
 
 # ── COMMISSIONER KEEPER REVIEW ───────────────────────────────────────────────

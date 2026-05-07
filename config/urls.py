@@ -1,7 +1,7 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
@@ -24,4 +24,10 @@ urlpatterns = [
         ),
         name="password_change_done",
     ),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
+
+# Serve media from disk in all modes when MEDIA_ROOT is configured.
+# This covers local dev and any production fallback where Cloudinary is not set.
+media_root = getattr(settings, "MEDIA_ROOT", None)
+if media_root:
+    urlpatterns += [re_path(r"^media/(?P<path>.*)$", serve, {"document_root": media_root})]

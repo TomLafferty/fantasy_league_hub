@@ -1,6 +1,6 @@
 from django import forms
 from django.db import transaction
-from .models import KeeperRecord, KeeperSubmission, Player, RosterSnapshot, Season, Team
+from .models import Draft, DraftComment, DraftMedia, KeeperRecord, KeeperSubmission, Player, RosterSnapshot, Season, Team
 
 
 class KeeperSubmissionForm(forms.Form):
@@ -59,3 +59,48 @@ class KeeperSubmissionForm(forms.Form):
                     player=player,
                     submitted_by=user,
                 )
+
+
+class DraftForm(forms.ModelForm):
+    class Meta:
+        model = Draft
+        fields = ["date", "location", "location_url", "notes"]
+        widgets = {
+            "date": forms.DateInput(attrs={"type": "date"}),
+            "notes": forms.Textarea(attrs={"rows": 4}),
+            "location_url": forms.URLInput(attrs={"placeholder": "https://airbnb.com/rooms/..."}),
+        }
+
+
+class DraftCommentForm(forms.ModelForm):
+    class Meta:
+        model = DraftComment
+        fields = ["text"]
+        widgets = {
+            "text": forms.Textarea(attrs={"rows": 3, "placeholder": "Add a comment..."}),
+        }
+        labels = {"text": ""}
+
+
+class DraftMediaForm(forms.ModelForm):
+    class Meta:
+        model = DraftMedia
+        fields = ["file", "caption"]
+        labels = {"file": "Upload image/video", "caption": "Caption (optional)"}
+
+
+class KeeperDeadlineForm(forms.ModelForm):
+    class Meta:
+        model = Season
+        fields = ["keeper_deadline"]
+        widgets = {
+            "keeper_deadline": forms.DateTimeInput(
+                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        instance = kwargs.get("instance")
+        if instance and instance.keeper_deadline:
+            self.initial["keeper_deadline"] = instance.keeper_deadline.strftime("%Y-%m-%dT%H:%M")

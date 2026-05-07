@@ -6,9 +6,43 @@
 <p><strong>Season:</strong> {{ season.name }} &mdash; <strong>Team:</strong> {{ team.name }}</p>
 
 {% if season.keeper_deadline %}
-  <div class="alert alert-secondary">
-    <strong>Deadline:</strong> {{ season.keeper_deadline|date:"F j, Y g:i A" }}
+  <div class="alert alert-secondary d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <span><strong>Deadline:</strong> {{ season.keeper_deadline|date:"F j, Y g:i A" }}</span>
+    {% if is_official %}
+      <button class="btn btn-sm btn-outline-secondary" type="button"
+              data-bs-toggle="collapse" data-bs-target="#deadline-edit-form">
+        Edit Deadline
+      </button>
+    {% endif %}
   </div>
+{% elif is_official %}
+  <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <span>No keeper deadline set.</span>
+    <button class="btn btn-sm btn-outline-secondary" type="button"
+            data-bs-toggle="collapse" data-bs-target="#deadline-edit-form">
+      Set Deadline
+    </button>
+  </div>
+{% endif %}
+
+{% if is_official %}
+<div class="collapse mb-3" id="deadline-edit-form">
+  <div class="card bg-dark" style="border-color: rgba(0,210,55,.3);">
+    <div class="card-body">
+      <h6 style="color:#00dd44;">Update Keeper Deadline</h6>
+      <form method="post" action="{% url 'keeper_deadline_update' %}">
+        {% csrf_token %}
+        <div class="d-flex gap-2 align-items-end flex-wrap">
+          <div>
+            <label class="form-label small mb-1">New deadline</label>
+            {{ deadline_form.keeper_deadline }}
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endif %}
 
 {% if ineligible %}

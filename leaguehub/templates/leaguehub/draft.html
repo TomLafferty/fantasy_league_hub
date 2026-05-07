@@ -1,0 +1,197 @@
+{% extends "leaguehub/base.html" %}
+{% block title %}Drafts — {{ league_name }} Hub{% endblock %}
+{% block nav_drafts %}active{% endblock %}
+{% block content %}
+<h1>Drafts</h1>
+
+{% if not seasons %}
+  <p class="text-muted">No seasons found.</p>
+{% else %}
+
+{# ── Season selector ── #}
+<form method="get" class="d-flex align-items-center gap-2 mb-4">
+  <label class="form-label mb-0" style="color:#aaa; white-space:nowrap;">Select year:</label>
+  <select name="season" class="form-select form-select-sm" style="max-width:120px;" onchange="this.form.submit()">
+    {% for s in seasons %}
+      <option value="{{ s.id }}" {% if s.id == selected_season.id %}selected{% endif %}>
+        {{ s.year }}{% if s.is_current %} ★{% endif %}
+      </option>
+    {% endfor %}
+  </select>
+</form>
+
+{% if draft %}
+
+{# ── Draft header ── #}
+<div class="mb-4">
+  <h2 style="color:#eaeaea;">
+    {{ selected_season.year }} Draft
+    {% if is_upcoming %}
+      <span class="badge ms-2" style="font-size:0.55rem; background:rgba(0,210,55,.25); color:#00ff50; border:1px solid rgba(0,210,55,.4); vertical-align:middle;">UPCOMING</span>
+    {% endif %}
+  </h2>
+
+  {% if draft.date or draft.location %}
+  <div class="mb-2" style="color:#c0c0c0; font-size:0.95rem;">
+    {% if draft.date %}<span>📅 {{ draft.date|date:"F j, Y" }}</span>{% endif %}
+    {% if draft.date and draft.location %} &nbsp;·&nbsp; {% endif %}
+    {% if draft.location %}
+      <span>📍
+        {% if draft.location_url %}
+          <a href="{{ draft.location_url }}" target="_blank" rel="noopener">{{ draft.location }}</a>
+        {% else %}
+          {{ draft.location }}
+        {% endif %}
+      </span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if draft.notes %}
+  <div class="mb-3" style="color:#b8d8b8; font-size:0.92rem; white-space:pre-wrap;">{{ draft.notes }}</div>
+  {% endif %}
+</div>
+
+{# ── Official edit form ── #}
+{% if is_official %}
+<div class="mb-4">
+  <button class="btn btn-sm btn-outline-secondary" type="button"
+          data-bs-toggle="collapse" data-bs-target="#draft-edit-form">
+    {% if draft.date or draft.location %}Edit Draft Info{% else %}Add Draft Info{% endif %}
+  </button>
+  <div class="collapse mt-2" id="draft-edit-form">
+    <div class="card bg-dark" style="border-color:rgba(0,210,55,.3);">
+      <div class="card-body">
+        <form method="post" action="{% url 'draft_update' selected_season.id %}">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small">Draft date</label>
+              {{ draft_form.date }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small">Location name</label>
+              {{ draft_form.location }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small">Location URL (Airbnb, etc.)</label>
+              {{ draft_form.location_url }}
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Notes / announcement</label>
+              {{ draft_form.notes }}
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm mt-3">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Fetched images from location URL ── #}
+{% if draft.fetched_images %}
+<div class="mb-4">
+  <h5>Location Photos</h5>
+  <div class="row g-2">
+    {% for img_url in draft.fetched_images %}
+    <div class="col-6 col-md-3">
+      <img src="{{ img_url }}" alt="Location photo" class="img-fluid rounded"
+           style="object-fit:cover; height:180px; width:100%; border:1px solid rgba(0,210,55,.2);">
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% elif is_upcoming and draft.location_url and not draft.fetched_images %}
+<div class="alert alert-warning mb-4">
+  Could not automatically load photos from the location link. Upload photos below.
+</div>
+{% endif %}
+
+{# ── Media gallery ── #}
+{% if draft.media.all %}
+<div class="mb-4">
+  <h5>Photos &amp; Media</h5>
+  <div class="row g-2">
+    {% for item in draft.media.all %}
+    <div class="col-6 col-md-3">
+      <div style="position:relative;">
+        <img src="{{ item.file.url }}" alt="{{ item.caption }}" class="img-fluid rounded"
+             style="object-fit:cover; height:180px; width:100%; border:1px solid rgba(0,210,55,.2);"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+        <div style="display:none; padding:0.5rem; color:#aaa; font-size:0.8rem;">📎 {{ item.file.name|slice:"20:" }}</div>
+        {% if item.caption %}
+        <div style="font-size:0.75rem; color:#aaa; margin-top:0.25rem;">{{ item.caption }}</div>
+        {% endif %}
+        <div style="font-size:0.7rem; color:#666;">{{ item.uploaded_by.username }} · {{ item.created_at|date:"M j" }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Upload media (any logged-in user) ── #}
+{% if user.is_authenticated %}
+<div class="mb-4">
+  <button class="btn btn-sm btn-outline-secondary" type="button"
+          data-bs-toggle="collapse" data-bs-target="#upload-media-form">
+    + Upload Photo / Media
+  </button>
+  <div class="collapse mt-2" id="upload-media-form">
+    <div class="card bg-dark" style="border-color:rgba(0,210,55,.2);">
+      <div class="card-body">
+        <form method="post" action="{% url 'draft_add_media' draft.id %}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label small">{{ media_form.file.label }}</label>
+              {{ media_form.file }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small">{{ media_form.caption.label }}</label>
+              {{ media_form.caption }}
+            </div>
+            <div class="col-md-2">
+              <button type="submit" class="btn btn-primary btn-sm w-100">Upload</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Comments ── #}
+<div class="mb-4">
+  <h5>Comments</h5>
+  {% for comment in draft.comments.all %}
+  <div class="mb-2 p-2" style="background:rgba(0,30,10,.5); border-left:3px solid rgba(0,200,50,.3); border-radius:2px;">
+    <div style="font-size:0.78rem; color:#666; margin-bottom:0.2rem;">
+      {{ comment.author.username }} &middot; {{ comment.created_at|date:"M j, Y g:i A" }}
+    </div>
+    <div style="color:#c8c8c8;">{{ comment.text }}</div>
+  </div>
+  {% empty %}
+  <p style="color:#666; font-size:0.9rem;">No comments yet. Be the first.</p>
+  {% endfor %}
+
+  {% if user.is_authenticated %}
+  <form method="post" action="{% url 'draft_add_comment' draft.id %}" class="mt-3">
+    {% csrf_token %}
+    {{ comment_form.text }}
+    <button type="submit" class="btn btn-primary btn-sm mt-2">Post Comment</button>
+  </form>
+  {% else %}
+  <p class="mt-2" style="color:#666; font-size:0.85rem;"><a href="/login/">Log in</a> to leave a comment.</p>
+  {% endif %}
+</div>
+
+{% else %}
+<p class="text-muted">No draft info recorded for {{ selected_season.year }} yet.</p>
+{% endif %}
+
+{% endif %}
+{% endblock %}

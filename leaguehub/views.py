@@ -1,4 +1,7 @@
+import re
 from collections import defaultdict
+
+import requests as http_requests
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -7,8 +10,50 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from .forms import KeeperSubmissionForm
-from .models import Champion, DraftPick, KeeperRecord, KeeperSubmission, Matchup, PlayerWeeklyScore, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
+from .forms import DraftCommentForm, DraftForm, DraftMediaForm, KeeperDeadlineForm, KeeperSubmissionForm
+from .models import Champion, Draft, DraftComment, DraftMedia, DraftPick, KeeperRecord, KeeperSubmission, Matchup, PlayerWeeklyScore, RosterSnapshot, RuleProposal, RuleVote, Season, Standing, Team, TeamAccess
+
+
+def is_league_official(user):
+    """True if the user has commissioner or officer status on their ManagerProfile."""
+    if not user.is_authenticated:
+        return False
+    try:
+        return user.managerprofile.is_commissioner or user.managerprofile.is_officer
+    except Exception:
+        return False
+
+
+def fetch_og_images(url):
+    """Try to pull og:image URLs from a page's Open Graph meta tags."""
+    try:
+        resp = http_requests.get(url, timeout=8, headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36"
+            )
+        })
+        if resp.status_code != 200:
+            return []
+        images = re.findall(
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+            resp.text, re.IGNORECASE,
+        )
+        images += re.findall(
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+            resp.text, re.IGNORECASE,
+        )
+        seen, result = set(), []
+        for img in images:
+            if img not in seen:
+                seen.add(img)
+                result.append(img)
+                if len(result) >= 8:
+                    break
+        return result
+    except Exception:
+        return []
 
 
 def home(request):
@@ -121,8 +166,17 @@ def vote_rule_view(request, proposal_id):
     else:
         RuleVote.objects.create(proposal=proposal, user=request.user, vote=vote_value)
 
-    down_count = RuleVote.objects.filter(proposal=proposal, vote="down").count()
-    if down_count >= 9:
+    # Officials' downvotes don't count toward the auto-deletion threshold.
+    from .models import ManagerProfile
+    official_user_ids = list(
+        ManagerProfile.objects.filter(
+            Q(is_commissioner=True) | Q(is_officer=True), user__isnull=False
+        ).values_list("user_id", flat=True)
+    )
+    non_official_down = RuleVote.objects.filter(
+        proposal=proposal, vote="down"
+    ).exclude(user_id__in=official_user_ids).count()
+    if non_official_down >= 9:
         proposal.delete()
         return JsonResponse({"deleted": True})
 
@@ -199,6 +253,49 @@ def hottest_coldest_view(request):
 
     today = date.today()
 
+    def best_streak_games(results, target):
+        """Return the games belonging to the longest streak of `target` result type."""
+        best_start, best_len = 0, 0
+        cur_start, cur_len = 0, 0
+        for i, g in enumerate(results):
+            if g["result"] == target:
+                if cur_len == 0:
+                    cur_start = i
+                cur_len += 1
+                if cur_len > best_len:
+                    best_len = cur_len
+                    best_start = cur_start
+            else:
+                cur_len = 0
+        return results[best_start: best_start + best_len]
+
+    # All-time records: longest win streak and longest loss streak across all history
+    all_time_hot = None
+    all_time_cold = None
+    for mgr_name_str, results in manager_results.items():
+        for target, current_record in [("W", all_time_hot), ("L", all_time_cold)]:
+            games = best_streak_games(results, target)
+            if not games:
+                continue
+            count = len(games)
+            if current_record is None or count > current_record["streak_count"]:
+                for g in games:
+                    g.setdefault("margin", round(abs(g["score"] - g["opponent_score"]), 2))
+                avg = round(sum(g["margin"] for g in games) / count, 2)
+                record = {
+                    "manager": mgr_name_str,
+                    "streak_count": count,
+                    "avg_margin": avg,
+                    "first_year": games[0]["year"],
+                    "first_week": games[0]["week"],
+                    "last_year": games[-1]["year"],
+                    "last_week": games[-1]["week"],
+                }
+                if target == "W":
+                    all_time_hot = record
+                else:
+                    all_time_cold = record
+
     # Calculate active streaks for each manager
     streaks = []
 
@@ -249,6 +346,8 @@ def hottest_coldest_view(request):
     return render(request, "leaguehub/hottest_coldest.html", {
         "hottest": hottest,
         "coldest": coldest,
+        "all_time_hot": all_time_hot,
+        "all_time_cold": all_time_cold,
     })
 
 
@@ -684,6 +783,9 @@ def submit_keepers_view(request):
         for p in PlayerModel.objects.filter(id__in=eligible_ids).values("id", "primary_position")
     }
 
+    official = is_league_official(request.user)
+    deadline_form = KeeperDeadlineForm(instance=season) if official else None
+
     return render(request, "leaguehub/submit_keepers.html", {
         "season": season,
         "team": team,
@@ -692,4 +794,108 @@ def submit_keepers_view(request):
         "ineligible": ineligible,
         "player_rounds": player_rounds,
         "player_positions": player_positions,
+        "is_official": official,
+        "deadline_form": deadline_form,
     })
+
+# ── KEEPER DEADLINE ──────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def keeper_deadline_update_view(request):
+    if not is_league_official(request.user):
+        messages.error(request, "You do not have permission to change the keeper deadline.")
+        return redirect("submit_keepers")
+    season = Season.objects.filter(is_current=True).first()
+    if not season:
+        raise Http404("No current season.")
+    form = KeeperDeadlineForm(request.POST, instance=season)
+    if form.is_valid():
+        form.save()
+        messages.success(request, "Keeper deadline updated.")
+    else:
+        messages.error(request, "Invalid deadline value.")
+    return redirect("submit_keepers")
+
+
+# ── DRAFTS ───────────────────────────────────────────────────────────────────
+
+def drafts_view(request):
+    from datetime import date as date_type
+    seasons = Season.objects.all().order_by("-year")
+    selected_id = request.GET.get("season")
+    selected_season = (
+        seasons.first() if not selected_id else get_object_or_404(Season, id=selected_id)
+    )
+
+    if not selected_season:
+        return render(request, "leaguehub/draft.html", {"seasons": seasons, "selected_season": None, "draft": None})
+
+    draft, _ = Draft.objects.get_or_create(season=selected_season)
+    today = date_type.today()
+    is_upcoming = selected_season.is_current and (draft.date is None or draft.date >= today)
+    official = is_league_official(request.user)
+
+    comment_form = DraftCommentForm() if request.user.is_authenticated else None
+    media_form = DraftMediaForm() if request.user.is_authenticated else None
+    draft_form = DraftForm(instance=draft) if official else None
+
+    return render(request, "leaguehub/draft.html", {
+        "seasons": seasons,
+        "selected_season": selected_season,
+        "draft": draft,
+        "is_upcoming": is_upcoming,
+        "is_official": official,
+        "comment_form": comment_form,
+        "media_form": media_form,
+        "draft_form": draft_form,
+    })
+
+
+@login_required
+@require_POST
+def draft_update_view(request, season_id):
+    if not is_league_official(request.user):
+        messages.error(request, "You do not have permission to edit draft info.")
+        return redirect("drafts")
+    season = get_object_or_404(Season, id=season_id)
+    draft, _ = Draft.objects.get_or_create(season=season)
+    old_url = draft.location_url
+    form = DraftForm(request.POST, instance=draft)
+    if form.is_valid():
+        updated = form.save(commit=False)
+        if updated.location_url and updated.location_url != old_url:
+            updated.fetched_images = fetch_og_images(updated.location_url)
+        elif not updated.location_url:
+            updated.fetched_images = []
+        updated.save()
+        messages.success(request, "Draft info saved.")
+    else:
+        messages.error(request, "Please correct the errors below.")
+    return redirect(f"/drafts/?season={season_id}")
+
+
+@login_required
+@require_POST
+def draft_add_comment_view(request, draft_id):
+    draft = get_object_or_404(Draft, id=draft_id)
+    form = DraftCommentForm(request.POST)
+    if form.is_valid():
+        comment = form.save(commit=False)
+        comment.draft = draft
+        comment.author = request.user
+        comment.save()
+    return redirect(f"/drafts/?season={draft.season_id}")
+
+
+@login_required
+@require_POST
+def draft_add_media_view(request, draft_id):
+    draft = get_object_or_404(Draft, id=draft_id)
+    form = DraftMediaForm(request.POST, request.FILES)
+    if form.is_valid():
+        media = form.save(commit=False)
+        media.draft = draft
+        media.uploaded_by = request.user
+        media.save()
+    return redirect(f"/drafts/?season={draft.season_id}")

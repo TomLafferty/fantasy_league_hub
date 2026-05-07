@@ -4,6 +4,37 @@
 {% block content %}
 <h1>Hottest and Coldest</h1>
 
+{% if all_time_hot or all_time_cold %}
+<div class="row mb-4">
+  {% if all_time_hot %}
+  <div class="col-md-6 mb-3 mb-md-0">
+    <div style="padding: 0.75rem 1rem; background: rgba(0,180,50,.07); border: 1px solid rgba(0,210,55,.35); border-radius: 4px;">
+      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #00aa33; margin-bottom: 0.3rem;">🔥 All-Time Win Streak Record</div>
+      <span style="color: #00ff50; font-size: 1.25rem; font-weight: 700;">{{ all_time_hot.manager }}</span>
+      <span style="color: #aaa; font-size: 0.95rem;"> &mdash; {{ all_time_hot.streak_count }}-game streak</span>
+      <div style="color: #88d888; font-size: 0.85rem; margin-top: 0.2rem;">
+        Avg margin of victory: <strong style="color: #00ff50;">+{{ all_time_hot.avg_margin }} pts</strong>
+        &nbsp;·&nbsp; {{ all_time_hot.first_year }} W{{ all_time_hot.first_week }} &ndash; {{ all_time_hot.last_year }} W{{ all_time_hot.last_week }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if all_time_cold %}
+  <div class="col-md-6">
+    <div style="padding: 0.75rem 1rem; background: rgba(180,0,0,.07); border: 1px solid rgba(200,0,0,.35); border-radius: 4px;">
+      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #aa3333; margin-bottom: 0.3rem;">❄️ All-Time Loss Streak Record</div>
+      <span style="color: #ff6666; font-size: 1.25rem; font-weight: 700;">{{ all_time_cold.manager }}</span>
+      <span style="color: #aaa; font-size: 0.95rem;"> &mdash; {{ all_time_cold.streak_count }}-game streak</span>
+      <div style="color: #d88888; font-size: 0.85rem; margin-top: 0.2rem;">
+        Avg margin of defeat: <strong style="color: #ff6666;">-{{ all_time_cold.avg_margin }} pts</strong>
+        &nbsp;·&nbsp; {{ all_time_cold.first_year }} W{{ all_time_cold.first_week }} &ndash; {{ all_time_cold.last_year }} W{{ all_time_cold.last_week }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="row">
   <!-- HOTTEST -->
   <div class="col-md-6 mb-4">

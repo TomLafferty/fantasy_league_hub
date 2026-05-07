@@ -3,6 +3,9 @@ from django.contrib import admin
 
 from .models import (
     Champion,
+    Draft,
+    DraftComment,
+    DraftMedia,
     DraftPick,
     KeeperRecord,
     KeeperSubmission,
@@ -122,3 +125,24 @@ class KeeperSubmissionAdmin(admin.ModelAdmin):
     list_filter = ["season__year"]
     search_fields = ["player__full_name", "team__name"]
     ordering = ["-season__year", "team__name"]
+
+
+@admin.register(Draft)
+class DraftAdmin(admin.ModelAdmin):
+    list_display = ["season", "date", "location"]
+    list_filter = ["season__year"]
+    ordering = ["-season__year"]
+
+
+@admin.register(DraftMedia)
+class DraftMediaAdmin(admin.ModelAdmin):
+    list_display = ["draft", "uploaded_by", "caption", "created_at"]
+    list_filter = ["draft__season__year"]
+    ordering = ["-created_at"]
+
+
+@admin.register(DraftComment)
+class DraftCommentAdmin(admin.ModelAdmin):
+    list_display = ["draft", "author", "created_at"]
+    list_filter = ["draft__season__year"]
+    ordering = ["-created_at"]

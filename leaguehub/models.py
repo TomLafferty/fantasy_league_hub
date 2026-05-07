@@ -227,6 +227,48 @@ class PlayerWeeklyScore(models.Model):
         return f"{self.season.year} W{self.week}: {self.player.full_name} ({self.team.name}) {self.points}pts [{role}]"
 
 
+class Draft(models.Model):
+    season = models.OneToOneField(Season, on_delete=models.CASCADE, related_name="draft_info")
+    date = models.DateField(null=True, blank=True)
+    location = models.CharField(max_length=200, blank=True)
+    location_url = models.URLField(max_length=500, blank=True)
+    notes = models.TextField(blank=True)
+    fetched_images = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.season.year} Draft"
+
+
+class DraftMedia(models.Model):
+    draft = models.ForeignKey(Draft, on_delete=models.CASCADE, related_name="media")
+    file = models.FileField(upload_to="draft_media/%Y/")
+    caption = models.CharField(max_length=200, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.draft} — {self.file.name}"
+
+
+class DraftComment(models.Model):
+    draft = models.ForeignKey(Draft, on_delete=models.CASCADE, related_name="comments")
+    text = models.TextField()
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.draft} — {self.author.username}"
+
+
 class KeeperSubmission(models.Model):
     season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="keeper_submissions")
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="keeper_submissions")

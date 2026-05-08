@@ -78,26 +78,27 @@ class Command(BaseCommand):
             if debug:
                 return
             if players_data:
-                created = updated = 0
+                objs = []
                 for sleeper_id, p in players_data.items():
                     if not p.get("full_name") and not p.get("first_name"):
                         continue
-                    _, was_created = SleeperPlayer.objects.update_or_create(
+                    objs.append(SleeperPlayer(
                         sleeper_id=sleeper_id,
-                        defaults={
-                            "full_name": p.get("full_name") or "",
-                            "first_name": p.get("first_name") or "",
-                            "last_name": p.get("last_name") or "",
-                            "position": p.get("position") or "",
-                            "nfl_team": p.get("team") or "",
-                            "status": p.get("status") or "",
-                        },
-                    )
-                    if was_created:
-                        created += 1
-                    else:
-                        updated += 1
-                self.stdout.write(f"    Players: {created} created, {updated} updated")
+                        full_name=p.get("full_name") or "",
+                        first_name=p.get("first_name") or "",
+                        last_name=p.get("last_name") or "",
+                        position=(p.get("position") or "")[:10],
+                        nfl_team=(p.get("team") or "")[:10],
+                        status=(p.get("status") or "")[:50],
+                    ))
+                self.stdout.write(f"    Upserting {len(objs)} players in bulk...")
+                SleeperPlayer.objects.bulk_create(
+                    objs,
+                    update_conflicts=True,
+                    unique_fields=["sleeper_id"],
+                    update_fields=["full_name", "first_name", "last_name", "position", "nfl_team", "status", "updated_at"],
+                )
+                self.stdout.write(f"    Players: {len(objs)} upserted")
             time.sleep(SLEEP_BETWEEN)
 
         # ── 2. League metadata ────────────────────────────────────────────────

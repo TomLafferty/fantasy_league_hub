@@ -29,20 +29,25 @@ from leaguehub.models import (
 
 BASE_URL = "https://api.sleeper.app/v1"
 SLEEP_BETWEEN = 0.3
+BULK_BATCH = 500
 
 
 def _get(path, debug=False):
     url = f"{BASE_URL}{path}"
     try:
-        resp = requests.get(url, timeout=20)
+        resp = requests.get(url, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if debug:
             import json
             print(json.dumps(data[:2] if isinstance(data, list) else data, indent=2, default=str))
         return data
-    except Exception as exc:
+    except Exception:
         return None
+
+
+def _pct(done, total):
+    return f"{int(done / total * 100)}%" if total else "—"
 
 
 class Command(BaseCommand):
@@ -71,9 +76,9 @@ class Command(BaseCommand):
     def _sync(self, league_id, season, is_current, sync_players, mark_champion, historical, debug):
         self.stdout.write(self.style.MIGRATE_HEADING(f"\n=== Syncing league {league_id} (season {season}) ==="))
 
-        # ── 1. Players (optional, slow) ──────────────────────────────────────
+        # ── 1. Players (optional) ─────────────────────────────────────────────
         if sync_players:
-            self.stdout.write("  Fetching all NFL players...")
+            self.stdout.write("  [1/9] Players — downloading from Sleeper API (~4 MB)...")
             players_data = _get("/players/nfl", debug=debug)
             if debug:
                 return
@@ -91,18 +96,25 @@ class Command(BaseCommand):
                         nfl_team=(p.get("team") or "")[:10],
                         status=(p.get("status") or "")[:50],
                     ))
-                self.stdout.write(f"    Upserting {len(objs)} players in bulk...")
-                SleeperPlayer.objects.bulk_create(
-                    objs,
-                    update_conflicts=True,
-                    unique_fields=["sleeper_id"],
-                    update_fields=["full_name", "first_name", "last_name", "position", "nfl_team", "status", "updated_at"],
-                )
-                self.stdout.write(f"    Players: {len(objs)} upserted")
+                total = len(objs)
+                self.stdout.write(f"  [1/9] Players — inserting {total:,} players in batches of {BULK_BATCH}...")
+                for i in range(0, total, BULK_BATCH):
+                    batch = objs[i:i + BULK_BATCH]
+                    SleeperPlayer.objects.bulk_create(
+                        batch,
+                        update_conflicts=True,
+                        unique_fields=["sleeper_id"],
+                        update_fields=["full_name", "first_name", "last_name", "position", "nfl_team", "status", "updated_at"],
+                    )
+                    done = min(i + BULK_BATCH, total)
+                    self.stdout.write(f"         {done:,}/{total:,} ({_pct(done, total)})")
+                self.stdout.write(self.style.SUCCESS(f"  [1/9] Players — done ({total:,} upserted)"))
             time.sleep(SLEEP_BETWEEN)
+        else:
+            self.stdout.write("  [1/9] Players — skipped (use --sync-players to refresh)")
 
         # ── 2. League metadata ────────────────────────────────────────────────
-        self.stdout.write("  Fetching league metadata...")
+        self.stdout.write("  [2/9] League metadata...")
         meta = _get(f"/league/{league_id}", debug=debug)
         if debug:
             return
@@ -120,22 +132,23 @@ class Command(BaseCommand):
                 "is_current": is_current,
             },
         )
-        self.stdout.write(f"    League: {league.name} ({league.status})")
+        self.stdout.write(self.style.SUCCESS(f"  [2/9] League — {league.name} (status: {league.status})"))
         time.sleep(SLEEP_BETWEEN)
 
         # ── 3. Users ──────────────────────────────────────────────────────────
-        self.stdout.write("  Fetching users...")
+        self.stdout.write("  [3/9] Users...")
         users_data = _get(f"/league/{league_id}/users") or []
         user_display = {u["user_id"]: u.get("display_name", "") for u in users_data}
         user_avatar = {u["user_id"]: u.get("avatar", "") for u in users_data}
+        self.stdout.write(self.style.SUCCESS(f"  [3/9] Users — {len(users_data)} found"))
         time.sleep(SLEEP_BETWEEN)
 
         # ── 4. Rosters ────────────────────────────────────────────────────────
-        self.stdout.write("  Fetching rosters...")
+        self.stdout.write("  [4/9] Rosters...")
         rosters_data = _get(f"/league/{league_id}/rosters") or []
         manager_map = {m.sleeper_user_id: m for m in ManagerProfile.objects.exclude(sleeper_user_id="")}
         roster_objs = []
-        for r in rosters_data:
+        for i, r in enumerate(rosters_data, 1):
             owner_id = r.get("owner_id") or ""
             settings = r.get("settings") or {}
             roster, _ = SleeperRoster.objects.update_or_create(
@@ -161,23 +174,28 @@ class Command(BaseCommand):
                 },
             )
             roster_objs.append(roster)
+            self.stdout.write(f"         Roster {i}/{len(rosters_data)} ({_pct(i, len(rosters_data))}) — {user_display.get(owner_id) or owner_id or 'unknown'}")
         time.sleep(SLEEP_BETWEEN)
 
         # ── 5. Rank computation ───────────────────────────────────────────────
         sorted_rosters = sorted(roster_objs, key=lambda r: (-r.wins, -float(r.points_for)))
         for rank, r in enumerate(sorted_rosters, 1):
             SleeperRoster.objects.filter(pk=r.pk).update(rank=rank)
-        self.stdout.write(f"    Rosters: {len(roster_objs)} synced and ranked")
+        self.stdout.write(self.style.SUCCESS(f"  [4/9] Rosters — {len(roster_objs)} synced and ranked"))
 
         # ── 6. Matchups ───────────────────────────────────────────────────────
-        if league.status != "pre_draft":
+        if league.status == "pre_draft":
+            self.stdout.write("  [5/9] Matchups — skipped (league is pre-draft)")
+        else:
             roster_lookup = {r.roster_id: r for r in roster_objs}
-            self.stdout.write("  Fetching matchups...")
+            self.stdout.write("  [5/9] Matchups — fetching week by week (up to 18)...")
             total_matchup_rows = 0
+            last_week = 0
             for week in range(1, 19):
                 data = _get(f"/league/{league_id}/matchups/{week}") or []
                 if not data:
                     break
+                last_week = week
                 for entry in data:
                     roster_id = entry.get("roster_id")
                     roster = roster_lookup.get(roster_id)
@@ -193,16 +211,19 @@ class Command(BaseCommand):
                         },
                     )
                     total_matchup_rows += 1
+                self.stdout.write(f"         Week {week}/18 ({_pct(week, 18)}) — {len(data)} entries")
                 time.sleep(SLEEP_BETWEEN)
-            self.stdout.write(f"    Matchups: {total_matchup_rows} rows")
+            self.stdout.write(self.style.SUCCESS(f"  [5/9] Matchups — {total_matchup_rows} rows across {last_week} weeks"))
 
         # ── 7. Transactions ───────────────────────────────────────────────────
-        self.stdout.write("  Fetching transactions...")
+        self.stdout.write("  [6/9] Transactions — fetching week by week (up to 18)...")
         total_txns = 0
+        last_week = 0
         for week in range(1, 19):
             data = _get(f"/league/{league_id}/transactions/{week}") or []
             if not data:
                 break
+            last_week = week
             for txn in data:
                 txn_id = txn.get("transaction_id")
                 if not txn_id:
@@ -226,11 +247,12 @@ class Command(BaseCommand):
                     },
                 )
                 total_txns += 1
+            self.stdout.write(f"         Week {week}/18 ({_pct(week, 18)}) — {len(data)} transactions")
             time.sleep(SLEEP_BETWEEN)
-        self.stdout.write(f"    Transactions: {total_txns}")
+        self.stdout.write(self.style.SUCCESS(f"  [6/9] Transactions — {total_txns} total"))
 
         # ── 8. Traded picks ───────────────────────────────────────────────────
-        self.stdout.write("  Fetching traded picks...")
+        self.stdout.write("  [7/9] Traded picks...")
         picks_data = _get(f"/league/{league_id}/traded_picks") or []
         SleeperTradedPick.objects.filter(league=league).delete()
         traded_pick_objs = []
@@ -243,7 +265,6 @@ class Command(BaseCommand):
                 previous_owner_id=p.get("previous_owner_id", 0),
                 owner_id=p.get("owner_id", 0),
             ))
-        # Deduplicate before bulk_create
         seen = set()
         unique_picks = []
         for p in traded_pick_objs:
@@ -252,17 +273,18 @@ class Command(BaseCommand):
                 seen.add(key)
                 unique_picks.append(p)
         SleeperTradedPick.objects.bulk_create(unique_picks, ignore_conflicts=True)
-        self.stdout.write(f"    Traded picks: {len(unique_picks)}")
+        self.stdout.write(self.style.SUCCESS(f"  [7/9] Traded picks — {len(unique_picks)} stored"))
         time.sleep(SLEEP_BETWEEN)
 
         # ── 9. Drafts ─────────────────────────────────────────────────────────
-        self.stdout.write("  Fetching drafts...")
+        self.stdout.write("  [8/9] Drafts...")
         drafts_data = _get(f"/league/{league_id}/drafts") or []
         total_picks = 0
-        for draft in drafts_data:
+        for di, draft in enumerate(drafts_data, 1):
             draft_id = draft.get("draft_id")
             if not draft_id:
                 continue
+            self.stdout.write(f"         Draft {di}/{len(drafts_data)} (id={draft_id})...")
             draft_picks = _get(f"/draft/{draft_id}/picks") or []
             for pick in draft_picks:
                 player_id = pick.get("player_id")
@@ -275,24 +297,28 @@ class Command(BaseCommand):
                     defaults={
                         "roster_id": pick.get("roster_id") or pick.get("picked_by") or 0,
                         "player": player_obj,
-                        "player_name": pick.get("metadata", {}).get("first_name", "") + " " + pick.get("metadata", {}).get("last_name", ""),
+                        "player_name": (pick.get("metadata") or {}).get("first_name", "") + " " + (pick.get("metadata") or {}).get("last_name", ""),
                     },
                 )
                 total_picks += 1
+            self.stdout.write(f"         → {len(draft_picks)} picks synced")
             time.sleep(SLEEP_BETWEEN)
-        self.stdout.write(f"    Draft picks: {total_picks}")
+        self.stdout.write(self.style.SUCCESS(f"  [8/9] Drafts — {total_picks} picks total"))
 
         # ── 10. Champion (optional) ───────────────────────────────────────────
         if mark_champion:
+            self.stdout.write("  [9/9] Champion...")
             champ_roster = SleeperRoster.objects.filter(league=league, rank=1).first()
             if champ_roster:
                 SleeperChampion.objects.update_or_create(
                     league=league,
                     defaults={"roster": champ_roster},
                 )
-                self.stdout.write(self.style.SUCCESS(f"    Champion: {champ_roster.manager or champ_roster.team_name}"))
+                self.stdout.write(self.style.SUCCESS(f"  [9/9] Champion — {champ_roster.manager or champ_roster.team_name}"))
             else:
-                self.stdout.write(self.style.WARNING("    No rank-1 roster found; skipping champion."))
+                self.stdout.write(self.style.WARNING("  [9/9] Champion — no rank-1 roster found, skipped"))
+        else:
+            self.stdout.write("  [9/9] Champion — skipped (use --mark-champion to set)")
 
         # ── 11. Historical recursion ──────────────────────────────────────────
         if historical and league.previous_league_id:
@@ -311,4 +337,4 @@ class Command(BaseCommand):
                     debug=False,
                 )
 
-        self.stdout.write(self.style.SUCCESS(f"\nDone — league {league_id} synced.\n"))
+        self.stdout.write(self.style.SUCCESS(f"\n✓ Done — league {league_id} synced.\n"))
